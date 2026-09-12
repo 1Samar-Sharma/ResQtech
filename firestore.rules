@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profiles
+    match /user_profiles/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId) || (isAuthenticated() && request.auth.token.email in ['chinchintu2000@gmail.com', 'sansamar2006@gmail.com']);
+    }
+
+    // WeatherGPT search history
+    match /weather_history/{historyId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Community weather hazards & reports
+    match /community_reports/{reportId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || request.auth.token.email in ['chinchintu2000@gmail.com', 'sansamar2006@gmail.com']);
+    }
+
+    // Mutual aid / relief requests
+    match /help_requests/{requestId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAuthenticated();
+    }
+
+    // Volunteer offers
+    match /volunteer_offers/{offerId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAuthenticated();
+    }
+
+    // Women safety SOS
+    match /women_safety_sos/{sosId} {
+      allow read, write: if true;
+    }
+
+    // Emergency broadcasts
+    match /emergency_broadcasts/{broadcastId} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.auth.token.email in ['chinchintu2000@gmail.com', 'sansamar2006@gmail.com'];
+    }
+
+    // System admins
+    match /system_admins/{adminId} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.auth.token.email in ['chinchintu2000@gmail.com', 'sansamar2006@gmail.com'];
+    }
+  }
+}
+

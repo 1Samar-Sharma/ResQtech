@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with roles, preferences, and emergency metadata",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "Avatar URL" },
+        "role": { "type": "string", "description": "User persona or role" },
+        "isAdmin": { "type": "boolean", "description": "Admin status" },
+        "preferredLanguage": { "type": "string", "description": "Preferred weather language" },
+        "preferredUnits": { "type": "string", "description": "Temperature units (C or F)" }
+      },
+      "required": ["uid", "email"]
+    },
+    "WeatherSearchHistory": {
+      "title": "WeatherSearchHistory",
+      "description": "User WeatherGPT conversational chat queries and forecast requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Search item ID" },
+        "userId": { "type": "string", "description": "User ID of searcher" },
+        "query": { "type": "string", "description": "Weather query text" },
+        "locationName": { "type": "string", "description": "Location queried" },
+        "persona": { "type": "string", "description": "Persona mode active" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "userId", "query"]
+    },
+    "CommunityReport": {
+      "title": "CommunityReport",
+      "description": "Crowdsourced weather hazard and civic disaster report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique report ID" },
+        "userId": { "type": "string", "description": "Reporting user ID" },
+        "title": { "type": "string", "description": "Report title" },
+        "category": { "type": "string", "description": "Hazard category" },
+        "severity": { "type": "string", "description": "Severity level" },
+        "locationName": { "type": "string", "description": "Location description" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "title", "category"]
+    }
+  },
+  "firestore": {
+    "/user_profiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "Personal profiles and WeatherGPT user preferences"
+    },
+    "/weather_history/{historyId}": {
+      "schema": "WeatherSearchHistory",
+      "description": "WeatherGPT chat questions and forecast interactions"
+    },
+    "/community_reports/{reportId}": {
+      "schema": "CommunityReport",
+      "description": "Crowdsourced extreme weather alerts and reports"
+    }
+  }
+}

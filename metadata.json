@@ -1,0 +1,6 @@
+{
+  "name": "WeatherGPT",
+  "description": "Conversational AI for weather forecasting, alerts, persona advisories, and climate intelligence powered by Firebase and Gemini.",
+  "requestFramePermissions": ["geolocation", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
