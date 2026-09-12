@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">WeatherGPT</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_ai_weather">Weather AI</string>
+    <string name="nav_forecast">Forecast</string>
+    <string name="nav_alerts">Alerts</string>
+    <string name="nav_relief">Relief</string>
+    <string name="nav_community">Community</string>
+    <string name="sos_beacon">SOS Distress</string>
+    <string name="emergency_beacon_desc">Broadcast 5km High-Priority Civilian &amp; Guardian Distress</string>
+    <string name="temperature_unit_c">°C</string>
+    <string name="temperature_unit_f">°F</string>
+</resources>
