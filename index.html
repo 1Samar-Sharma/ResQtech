@@ -2,15 +2,84 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <title>WeatherGPT</title>
     <meta name="description" content="Conversational AI for weather forecasting, alerts, persona advisories, and climate intelligence powered by Firebase and Gemini." />
     <meta property="og:title" content="WeatherGPT" />
     <meta property="og:description" content="Conversational AI for weather forecasting, alerts, persona advisories, and climate intelligence powered by Firebase and Gemini." />
+    <meta name="theme-color" content="#050810" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="application-name" content="WeatherGPT" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script>
+      // Global error interceptor for external third-party maps scripts
+      (function() {
+        window.addEventListener('error', function(event) {
+          var msg = event.message || '';
+          if (
+            msg === 'Script error.' ||
+            (typeof msg === 'string' && (
+              msg.indexOf('ApiNotActivatedMapError') !== -1 ||
+              msg.indexOf('Google Maps') !== -1 ||
+              msg.indexOf('gm_authFailure') !== -1
+            ))
+          ) {
+            console.warn('[Map Engine] External script activation notice intercepted:', msg);
+            if (typeof window.__onMapFallback === 'function') {
+              window.__onMapFallback();
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          var msg = (reason && reason.message) || String(reason || '');
+          if (msg.indexOf('ApiNotActivatedMapError') !== -1 || msg.indexOf('Google Maps') !== -1) {
+            console.warn('[Map Engine] Unhandled map rejection handled:', msg);
+            event.preventDefault();
+          }
+        });
+
+        window.gm_authFailure = function() {
+          console.warn('[Google Maps Platform] Authentication failed: Maps JavaScript API is not active on this key. Falling back to OpenStreetMap.');
+          if (typeof window.__onMapFallback === 'function') {
+            window.__onMapFallback();
+          }
+        };
+
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var joined = args.map(function(a) {
+            return typeof a === 'string' ? a : ((a && a.message) || '');
+          }).join(' ');
+          if (
+            joined.indexOf('ApiNotActivatedMapError') !== -1 ||
+            joined.indexOf('Google Maps JavaScript API error') !== -1
+          ) {
+            console.warn('[Google Maps Platform] Handled unactivated API notice:', joined);
+            if (typeof window.__onMapFallback === 'function') {
+              window.__onMapFallback();
+            }
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+      })();
+    </script>
   </head>
   <body class="bg-stone-900 text-stone-100 antialiased selection:bg-amber-500/30 selection:text-amber-200">
     <div id="root"></div>

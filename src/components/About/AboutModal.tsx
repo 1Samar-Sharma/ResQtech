@@ -91,6 +91,47 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onOpenD
           </div>
         </div>
 
+        {/* Connected Cloud & Android Compatibility */}
+        <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-white flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Firebase & Android Status
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+              Connected
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-300 space-y-1 font-mono">
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Project ID:</span>
+              <span className="text-sky-300 font-semibold font-mono">weathergpt-resqtech</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Project Number:</span>
+              <span className="text-slate-200 font-mono">1079746544509</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Android Package:</span>
+              <span className="text-emerald-300 font-mono">WeatherGPT.ResQtech</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Database:</span>
+              <span className="text-slate-200 truncate max-w-[200px]" title="ai-studio-newcivicrelief-578626da-93a6-4ebc-98d0-c8b2b781febe">
+                ai-studio-newcivicrelief-...
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Master Admin:</span>
+              <span className="text-slate-200">chinchintu2000@gmail.com</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans">Android Mobile:</span>
+              <span className="text-emerald-400 font-sans font-semibold">PWA / Standalone WebAPK Ready</span>
+            </div>
+          </div>
+        </div>
+
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-2 border-t border-white/10">
           {onOpenDeck ? (

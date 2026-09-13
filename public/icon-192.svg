@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="36" fill="#050810"/>
+  <circle cx="96" cy="96" r="68" fill="url(#grad)" opacity="0.15"/>
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <!-- Cloud & Sun / Radar graphic -->
+  <circle cx="120" cy="76" r="24" fill="#f59e0b"/>
+  <path d="M68 126h56a24 24 0 0 0 4-47.6A32 32 0 0 0 66 86a24 24 0 0 0 2 40z" fill="#0284c7"/>
+  <path d="M96 52v8M96 132v8M52 96h8M132 96h8" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+</svg>

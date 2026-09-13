@@ -46,12 +46,12 @@ export const PUBLIC_COMMAND_NAME = 'WeatherGPT Disaster & Forecasting Center';
 
 // Load configuration from firebase-applet-config.json
 export const firebaseConfig = {
-  apiKey: firebaseAppletConfig.apiKey || ((import.meta as any).env?.VITE_FIREBASE_API_KEY as string) || "",
-  authDomain: firebaseAppletConfig.authDomain || "causal-sandbox-sf6jr.firebaseapp.com",
-  projectId: firebaseAppletConfig.projectId || "causal-sandbox-sf6jr",
-  storageBucket: firebaseAppletConfig.storageBucket || "causal-sandbox-sf6jr.firebasestorage.app",
-  messagingSenderId: firebaseAppletConfig.messagingSenderId || "597552591676",
-  appId: firebaseAppletConfig.appId || "1:597552591676:web:f31b304e046b0f06f12439",
+  apiKey: firebaseAppletConfig.apiKey || ((import.meta as any).env?.VITE_FIREBASE_API_KEY as string) || "AIzaSyCUrPo6WXT8hEJ1dk3bUAeL9Lw1tw4pI_4",
+  authDomain: firebaseAppletConfig.authDomain || "weathergpt-resqtech.firebaseapp.com",
+  projectId: firebaseAppletConfig.projectId || "weathergpt-resqtech",
+  storageBucket: firebaseAppletConfig.storageBucket || "weathergpt-resqtech.firebasestorage.app",
+  messagingSenderId: firebaseAppletConfig.messagingSenderId || "1079746544509",
+  appId: firebaseAppletConfig.appId || "1:1079746544509:android:2b3afbab9e64cbcd228214",
   firestoreDatabaseId: firebaseAppletConfig.firestoreDatabaseId || "ai-studio-newcivicrelief-578626da-93a6-4ebc-98d0-c8b2b781febe",
 };
 

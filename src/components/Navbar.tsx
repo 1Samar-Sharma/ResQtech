@@ -23,6 +23,7 @@ import {
 import { soundPlayer } from '../utils/audio';
 import { useAuth } from '../context/AuthContext';
 import { notificationService, NotificationPermissionStatus } from '../utils/notifications';
+import { PWAInstallButton } from './Common/PWAInstallButton';
 
 export type AppNavTab =
   | 'home'
@@ -333,6 +334,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls (Right) */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Android PWA Install Prompt */}
+          <PWAInstallButton variant="compact" />
+
           {/* About Modal Button */}
           {onOpenAboutModal && (
             <button

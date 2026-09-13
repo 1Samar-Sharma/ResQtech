@@ -185,26 +185,63 @@ export default function App() {
   const [customLatInput, setCustomLatInput] = useState('');
   const [customLngInput, setCustomLngInput] = useState('');
 
-  // Map Engine & API Key (resolved securely from environment/server config, no hardcoded keys)
-  const [googleMapsApiKey, setGoogleMapsApiKey] = useState<string>(
-    ((import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY as string) || ''
-  );
-  const [mapProvider, setMapProvider] = useState<'google' | 'leaflet'>(
-    ((import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY as string) ? 'google' : 'leaflet'
-  );
+  // Map Engine & API Key (safely resolved from server validation, defaulting to reliable Leaflet OpenStreetMap)
+  const [googleMapsApiKey, setGoogleMapsApiKey] = useState<string>('');
+  const [isGoogleMapsActivated, setIsGoogleMapsActivated] = useState<boolean>(false);
+  const [mapProvider, setMapProvider] = useState<'google' | 'leaflet'>('leaflet');
+  const [mapEngineNotice, setMapEngineNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!googleMapsApiKey) {
-      fetch('/api/config/maps')
-        .then((r) => r.json())
-        .then((d) => {
-          if (d?.configured && d?.apiKey) {
-            setGoogleMapsApiKey(d.apiKey);
-            setMapProvider('google');
-          }
-        })
-        .catch(() => {});
-    }
+    fetch('/api/config/maps')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.configured && d?.apiKey && d?.status === 'active') {
+          setGoogleMapsApiKey(d.apiKey);
+          setIsGoogleMapsActivated(true);
+        } else {
+          setIsGoogleMapsActivated(false);
+          setGoogleMapsApiKey('');
+        }
+      })
+      .catch(() => {
+        setIsGoogleMapsActivated(false);
+      });
+  }, []);
+
+  // Global listener for Google Maps authentication/activation errors (ApiNotActivatedMapError)
+  useEffect(() => {
+    const handleFallback = () => {
+      setMapProvider('leaflet');
+      setIsGoogleMapsActivated(false);
+      setMapEngineNotice('Google Maps requires Maps JavaScript API activation in Google Cloud Console. OpenStreetMap (Leaflet) is running with full live disaster telemetry.');
+    };
+
+    (window as any).__onMapFallback = handleFallback;
+
+    const prevAuthFailure = (window as any).gm_authFailure;
+    (window as any).gm_authFailure = () => {
+      console.warn('[Map Engine] Google Maps auth failure intercepted. Defaulting to Leaflet.');
+      handleFallback();
+      if (prevAuthFailure) prevAuthFailure();
+    };
+
+    const handleWindowError = (event: ErrorEvent) => {
+      const msg = event.message || '';
+      if (
+        msg.includes('ApiNotActivatedMapError') ||
+        msg.includes('Google Maps JavaScript API error') ||
+        msg === 'Script error.'
+      ) {
+        handleFallback();
+      }
+    };
+    window.addEventListener('error', handleWindowError);
+
+    return () => {
+      delete (window as any).__onMapFallback;
+      (window as any).gm_authFailure = prevAuthFailure;
+      window.removeEventListener('error', handleWindowError);
+    };
   }, []);
 
   // Map Filter State
@@ -936,15 +973,22 @@ export default function App() {
                 {/* Map Engine Toggle: Google Maps API vs Leaflet OpenStreetMap */}
                 <div className="flex items-center gap-1 bg-white/[0.06] p-1 rounded-xl border border-white/10 text-xs ml-auto">
                   <button
-                    onClick={() => setMapProvider('google')}
+                    onClick={() => {
+                      if (isGoogleMapsActivated && googleMapsApiKey) {
+                        setMapProvider('google');
+                      } else {
+                        setMapEngineNotice('Google Maps requires Maps JavaScript API activation in Google Cloud Console. OpenStreetMap (Leaflet) is running with full live disaster telemetry.');
+                        setMapProvider('leaflet');
+                      }
+                    }}
                     className={`px-3 py-1 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all ${
                       mapProvider === 'google'
                         ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30'
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
                     }`}
-                    title="Google Cloud Maps Platform API"
+                    title={isGoogleMapsActivated ? "Google Cloud Maps Platform API" : "Maps JavaScript API not activated on key - OpenStreetMap active"}
                   >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className={`w-2 h-2 rounded-full ${isGoogleMapsActivated ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
                     <span>Google Maps API</span>
                   </button>
                   <button
@@ -962,8 +1006,24 @@ export default function App() {
               </div>
             </div>
 
+            {/* Map Engine Fallback Notice */}
+            {mapEngineNotice && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 flex items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
+                  <span>{mapEngineNotice}</span>
+                </div>
+                <button
+                  onClick={() => setMapEngineNotice(null)}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {/* Interactive Map: Google Cloud Maps Platform or Leaflet OpenStreetMap */}
-            {mapProvider === 'google' && googleMapsApiKey ? (
+            {mapProvider === 'google' && googleMapsApiKey && isGoogleMapsActivated ? (
               <GoogleMapsView
                 apiKey={googleMapsApiKey}
                 alerts={disasterAlerts}

@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { Component, useState, useMemo, useEffect, ReactNode, ErrorInfo } from 'react';
 import {
   APIProvider,
   Map,
   AdvancedMarker,
   InfoWindow,
   MapCameraChangedEvent,
+  useApiLoadingStatus,
+  APILoadingStatus,
 } from '@vis.gl/react-google-maps';
 import {
   DisasterAlert,
@@ -29,6 +31,8 @@ import {
   ExternalLink,
   Layers,
   MapPin,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { calculateDistanceKm, formatDistance } from '../../utils/geo';
 import { GoogleMapCircle } from './GoogleMapCircle';
@@ -55,6 +59,106 @@ interface GoogleMapsViewProps {
   onRequestAidAtLocation?: (coords: Coordinates) => void;
   onOpenBroadcastModal?: () => void;
   onSwitchToLeaflet?: () => void;
+}
+
+const ApiStatusHandler: React.FC<{ onSwitchToLeaflet?: () => void }> = ({ onSwitchToLeaflet }) => {
+  const status = useApiLoadingStatus();
+
+  if (status === APILoadingStatus.AUTH_FAILURE || status === APILoadingStatus.FAILED) {
+    return (
+      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center bg-slate-950/95 backdrop-blur-2xl">
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-xl">
+          <AlertTriangle className="w-7 h-7" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-100 mb-2">Google Maps JavaScript API Not Activated</h3>
+        <p className="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+          The API key requires the <span className="text-amber-300 font-semibold">Maps JavaScript API</span> to be enabled in Google Cloud Console. The fully featured OpenStreetMap (Leaflet) engine is ready.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {onSwitchToLeaflet && (
+            <button
+              onClick={onSwitchToLeaflet}
+              className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Layers className="w-4 h-4" />
+              <span>Switch to OpenStreetMap (Leaflet)</span>
+            </button>
+          )}
+          <a
+            href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com"
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white font-medium text-sm border border-white/10 transition-all flex items-center gap-2"
+          >
+            <ExternalLink className="w-4 h-4" />
+            <span>Enable in Cloud Console</span>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === APILoadingStatus.LOADING) {
+    return (
+      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm pointer-events-none">
+        <Loader2 className="w-8 h-8 text-cyan-400 animate-spin mb-2" />
+        <p className="text-xs text-slate-400 font-medium">Connecting to Google Maps Platform...</p>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+interface MapErrorBoundaryProps {
+  onSwitchToLeaflet?: () => void;
+  children: React.ReactNode;
+}
+
+interface MapErrorBoundaryState {
+  hasError: boolean;
+}
+
+class MapErrorBoundary extends Component<MapErrorBoundaryProps, MapErrorBoundaryState> {
+  declare props: MapErrorBoundaryProps;
+  state: MapErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): MapErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, info: ErrorInfo) {
+    console.warn('[Map Engine] GoogleMapsView caught error:', error, info);
+    if (this.props.onSwitchToLeaflet) {
+      this.props.onSwitchToLeaflet();
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center bg-slate-950/95 backdrop-blur-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-xl">
+            <AlertTriangle className="w-7 h-7" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-100 mb-2">Google Maps Initialization Notice</h3>
+          <p className="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+            Google Maps Platform encountered an initialization issue. OpenStreetMap (Leaflet) is ready to power full live disaster telemetry.
+          </p>
+          {this.props.onSwitchToLeaflet && (
+            <button
+              onClick={this.props.onSwitchToLeaflet}
+              className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Layers className="w-4 h-4" />
+              <span>Switch to OpenStreetMap (Leaflet)</span>
+            </button>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export const GoogleMapsView: React.FC<GoogleMapsViewProps> = ({
@@ -188,14 +292,53 @@ export const GoogleMapsView: React.FC<GoogleMapsViewProps> = ({
     }
   };
 
+  useEffect(() => {
+    const prevAuthFailure = (window as any).gm_authFailure;
+    (window as any).gm_authFailure = () => {
+      console.warn('Google Maps authentication failed (e.g. ApiNotActivatedMapError). Falling back to Leaflet OSM.');
+      if (onSwitchToLeaflet) {
+        onSwitchToLeaflet();
+      }
+      if (prevAuthFailure) prevAuthFailure();
+    };
+    return () => {
+      (window as any).gm_authFailure = prevAuthFailure;
+    };
+  }, [onSwitchToLeaflet]);
+
+  if (!apiKey) {
+    return (
+      <div className="relative w-full h-[620px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-slate-950 font-sans flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-xl">
+          <AlertTriangle className="w-7 h-7" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-100 mb-2">Google Maps JavaScript API Setup</h3>
+        <p className="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+          To display Google Maps, activate the Maps JavaScript API in Google Cloud Console. OpenStreetMap (Leaflet) is actively powering the map.
+        </p>
+        {onSwitchToLeaflet && (
+          <button
+            onClick={onSwitchToLeaflet}
+            className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Layers className="w-4 h-4" />
+            <span>Switch to OpenStreetMap (Leaflet)</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-[620px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-slate-950 font-sans">
-      <APIProvider
-        apiKey={apiKey}
-        libraries={['marker', 'geometry']}
-        internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-      >
-        <Map
+      <MapErrorBoundary onSwitchToLeaflet={onSwitchToLeaflet}>
+        <APIProvider
+          apiKey={apiKey}
+          libraries={['marker', 'geometry']}
+          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+        >
+          <ApiStatusHandler onSwitchToLeaflet={onSwitchToLeaflet} />
+          <Map
           mapId="DEMO_MAP_ID"
           center={camera.center}
           zoom={camera.zoom}
@@ -512,6 +655,7 @@ export const GoogleMapsView: React.FC<GoogleMapsViewProps> = ({
           )}
         </Map>
       </APIProvider>
+      </MapErrorBoundary>
 
       {/* Floating Top Control Bar */}
       <div className="absolute top-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">

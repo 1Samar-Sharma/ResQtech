@@ -7,6 +7,15 @@ import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
+// Process-level crash prevention to ensure dev server remains resilient
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('[Server Warning] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[Server Warning] Uncaught Exception:', error);
+});
+
 const app = express();
 const PORT = 3000;
 
@@ -1598,12 +1607,45 @@ app.get('/api/weather/openweather', async (req: Request, res: Response) => {
   }
 });
 
+// Cache maps activation check to avoid repeated external requests
+let cachedMapsActivation: { isActivated: boolean; key: string; checkedAt: number } | null = null;
+
 // Maps Configuration endpoint for client initialization
-app.get('/api/config/maps', (req: Request, res: Response) => {
-  const mapsKey = process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '';
+app.get('/api/config/maps', async (req: Request, res: Response) => {
+  const geminiKey = process.env.GEMINI_API_KEY || '';
+  let mapsKey = process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '';
+
+  // Prevent using Gemini API key as Google Maps API key
+  if (mapsKey && geminiKey && mapsKey === geminiKey) {
+    mapsKey = '';
+  }
+
+  let isActivated = false;
+  const now = Date.now();
+
+  if (mapsKey) {
+    if (cachedMapsActivation && cachedMapsActivation.key === mapsKey && (now - cachedMapsActivation.checkedAt) < 60000) {
+      isActivated = cachedMapsActivation.isActivated;
+    } else {
+      try {
+        const testRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=0,0&key=${mapsKey}`);
+        const data: any = await testRes.json();
+        isActivated = data.status !== 'REQUEST_DENIED' && data.status !== 'OVER_QUERY_LIMIT';
+      } catch {
+        isActivated = false;
+      }
+      cachedMapsActivation = { isActivated, key: mapsKey, checkedAt: now };
+    }
+  }
+
   return res.json({
-    configured: Boolean(mapsKey),
-    apiKey: mapsKey || '',
+    configured: isActivated,
+    apiKey: isActivated ? mapsKey : '',
+    status: isActivated ? 'active' : (mapsKey ? 'unactivated' : 'not_configured'),
+    engine: isActivated ? 'google' : 'leaflet',
+    message: isActivated
+      ? 'Google Cloud Maps Platform Active'
+      : 'Maps JavaScript API is not activated. OpenStreetMap (Leaflet) is actively powering the map.',
   });
 });
 
@@ -3625,23 +3667,35 @@ function generateFallbackAnalysis(category?: string, severity?: string) {
 }
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
+  try {
+    if (process.env.NODE_ENV !== 'production') {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req: Request, res: Response) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`CivicRelief Grounded Server running on http://0.0.0.0:${PORT}`);
-  });
+    // Global Express error handler
+    app.use((err: any, _req: Request, res: Response, _next: any) => {
+      console.error('[Server Error Handler]:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal Server Error', message: err?.message || 'Unknown error' });
+      }
+    });
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`CivicRelief Grounded Server running on http://0.0.0.0:${PORT}`);
+    });
+  } catch (error) {
+    console.error('[Server Fatal] Failed to start server:', error);
+  }
 }
 
 startServer();
