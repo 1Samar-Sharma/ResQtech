@@ -34,6 +34,7 @@ import {
   IMDColorAlert,
 } from '../../types';
 import { soundPlayer } from '../../utils/audio';
+import { PWAInstallButton } from '../Common/PWAInstallButton';
 
 interface HomeScreenProps {
   userLocation: Coordinates;
@@ -218,6 +219,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
         </div>
       </header>
+
+      {/* Android Native PWA Banner */}
+      <PWAInstallButton variant="full" />
 
       {/* ========================================================================= */}
       {/* 2. STRONGEST VISUAL ELEMENT: ASK WEATHERGPT */}
@@ -599,7 +603,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <Radio className="w-4 h-4 animate-pulse" />
             </div>
             <div className="text-xs font-black text-white">Report Emergency</div>
-            <div className="text-[10px] text-red-300 mt-0.5">5km broadcast</div>
+            <div className="text-[10px] text-red-300 mt-0.5">Local alert broadcast</div>
           </button>
 
           {/* Request Aid */}

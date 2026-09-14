@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   HeartHandshake,
   Radio,
@@ -62,6 +62,17 @@ export const CivicReliefScreen: React.FC<CivicReliefScreenProps> = ({
   onNavigateTab,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'board' | 'feed' | 'request_form' | 'volunteer_form'>('board');
+
+  // Filter out any AI-generated seeds or fake placeholders - genuine requests only
+  const genuineRequests = useMemo(() => {
+    return helpRequests.filter((r) => {
+      if (!r) return false;
+      if (r.id?.startsWith('req-seed') || r.id?.includes('seed')) return false;
+      if (r.userId?.startsWith('civic-resident-10')) return false;
+      if ((r as any).isAiGenerated || (r as any).isMock) return false;
+      return true;
+    });
+  }, [helpRequests]);
 
   const handleReportEmergency = () => {
     soundPlayer.playBeep(880, 0.1);
@@ -131,7 +142,7 @@ export const CivicReliefScreen: React.FC<CivicReliefScreenProps> = ({
               <Radio className="w-5 h-5 animate-pulse" />
             </div>
             <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white">
-              5km Radio
+              Live Alert
             </span>
           </div>
           <div>
@@ -139,7 +150,7 @@ export const CivicReliefScreen: React.FC<CivicReliefScreenProps> = ({
               REPORT EMERGENCY
             </div>
             <div className="text-xs text-red-100 mt-0.5">
-              Broadcast critical alert to 5km mesh
+              Broadcast critical community relief alert
             </div>
           </div>
         </button>
@@ -227,7 +238,7 @@ export const CivicReliefScreen: React.FC<CivicReliefScreenProps> = ({
               : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10'
           }`}
         >
-          Active Aid Requests ({helpRequests.length})
+          Active Aid Requests ({genuineRequests.length})
         </button>
 
         <button
@@ -275,7 +286,7 @@ export const CivicReliefScreen: React.FC<CivicReliefScreenProps> = ({
         />
       ) : (
         <MutualAidModule
-          helpRequests={helpRequests}
+          helpRequests={genuineRequests}
           volunteers={volunteers}
           userLocation={userLocation}
           userAddress={userAddress}

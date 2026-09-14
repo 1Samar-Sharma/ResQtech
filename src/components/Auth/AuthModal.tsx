@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Shield,
   Lock,
@@ -14,6 +14,7 @@ import {
   Users,
   X,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -34,7 +35,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     loginWithEmail,
     signupWithEmail,
     quickDemoLogin,
+    continueAsGuest,
     setIsRulesModalOpen,
+    setIsAuthModalOpen,
   } = useAuth();
 
   const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin');
@@ -54,16 +57,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Watchdog timer: If authenticating for more than 5s, auto-reset to avoid hanging UI
+  useEffect(() => {
+    let timer: any = null;
+    if (isLoading) {
+      timer = setTimeout(() => {
+        setIsLoading(false);
+      }, 5000);
+    }
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
   if (!isOpen) return null;
 
   const handleClose = () => {
-    // Only allow dismissal if user has an active authenticated session
-    if (!currentUser) {
-      return;
-    }
-    if (canDismiss && onClose) {
+    if (onClose) {
       onClose();
     }
+    setIsAuthModalOpen(false);
   };
 
   // Email: Sign In / Sign Up
@@ -195,7 +206,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <span>Continue with Google Account</span>
           </button>
 
-          {/* Quick 1-Click for chinchintu2000@gmail.com */}
+          {/* Quick 1-Click Master Admin Access */}
           <button
             type="button"
             disabled={isLoading}
@@ -203,7 +214,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setError(null);
               setIsLoading(true);
               try {
-                await loginWithGoogle('chinchintu2000@gmail.com');
+                await loginWithEmail('chinchintu2000@gmail.com', 'chinchintu2000@#');
                 handleClose();
               } catch (e: any) {
                 setError(e.message || 'Login error');
@@ -211,11 +222,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 setIsLoading(false);
               }
             }}
-            className="w-full py-2 px-3 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            className="w-full py-2.5 px-3 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
-            <User className="w-3.5 h-3.5 text-sky-400" />
-            <span>Sign in as <strong className="text-sky-300">chinchintu2000@gmail.com</strong> (WeatherGPT Admin)</span>
+            <Shield className="w-3.5 h-3.5 text-sky-400" />
+            <span>Sign in as <strong className="text-sky-300">Master Administrator</strong> (WeatherGPT Executive)</span>
           </button>
+
+          {/* Loading watchdog and instant reset helper */}
+          {isLoading && (
+            <div className="flex items-center justify-between px-3 py-1.5 bg-amber-500/10 border border-amber-500/25 rounded-xl">
+              <span className="text-[11px] text-amber-300 flex items-center gap-1.5 font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 flex-shrink-0" />
+                Authenticating session...
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLoading(false);
+                  setError(null);
+                }}
+                className="text-[11px] text-red-400 hover:text-red-300 underline font-semibold cursor-pointer"
+              >
+                Cancel / Reset
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 my-1">
@@ -450,8 +481,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
 
+        {/* Guest access option */}
+        <div className="pt-2 text-center border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => {
+              continueAsGuest();
+              handleClose();
+            }}
+            className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors underline cursor-pointer"
+          >
+            Or continue as Guest (Explore live weather & emergency radar without logging in)
+          </button>
+        </div>
+
         {/* Footer Rules link */}
-        <div className="pt-1.5 text-center border-t border-white/10 text-[11px] text-slate-400">
+        <div className="pt-1 text-center text-[11px] text-slate-400">
           By authenticating, you agree to the{' '}
           <button
             type="button"

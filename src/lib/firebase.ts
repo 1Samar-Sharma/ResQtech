@@ -81,10 +81,40 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
+// Timeout helper to guarantee asynchronous operations never hang indefinitely
+export function promiseWithTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(fallback);
+      }
+    }, ms);
+
+    promise
+      .then((res) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(res);
+        }
+      })
+      .catch((err) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          console.warn('Promise settled with error in timeout guard:', err);
+          resolve(fallback);
+        }
+      });
+  });
+}
+
 // Validate connection to Firestore on initialization
 async function testFirestoreConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await promiseWithTimeout(getDocFromServer(doc(db, 'test', 'connection')), 2000, null);
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn("Please check your Firebase configuration.");
@@ -181,7 +211,10 @@ class RealtimeSyncManager {
           const { helpRequests, volunteers, womenSafetyAlerts, communityReports, systemAdmins } = json.data;
           
           if (Array.isArray(helpRequests)) {
-            this.helpRequests = helpRequests;
+            // Strictly genuine citizen requests only - filter out any AI-generated seeds
+            this.helpRequests = helpRequests.filter(
+              (r) => !r.id?.startsWith('req-seed') && !r.id?.includes('seed') && !r.userId?.startsWith('civic-resident-10')
+            );
             this.notifyHelpRequests();
           }
           if (Array.isArray(volunteers)) {
@@ -226,7 +259,9 @@ class RealtimeSyncManager {
             case 'INIT_SYNC':
               if (message.data) {
                 if (Array.isArray(message.data.helpRequests)) {
-                  this.helpRequests = message.data.helpRequests;
+                  this.helpRequests = message.data.helpRequests.filter(
+                    (r: any) => !r.id?.startsWith('req-seed') && !r.id?.includes('seed') && !r.userId?.startsWith('civic-resident-10')
+                  );
                   this.notifyHelpRequests();
                 }
                 if (Array.isArray(message.data.volunteers)) {
@@ -250,17 +285,22 @@ class RealtimeSyncManager {
 
             case 'HELP_REQUESTS_UPDATED':
               if (Array.isArray(message.data)) {
-                this.helpRequests = message.data;
+                this.helpRequests = message.data.filter(
+                  (r: any) => !r.id?.startsWith('req-seed') && !r.id?.includes('seed') && !r.userId?.startsWith('civic-resident-10')
+                );
                 this.notifyHelpRequests();
               }
               break;
 
             case 'NEW_HELP_REQUEST':
               if (message.data && message.data.id) {
-                const exists = this.helpRequests.some((r) => r.id === message.data.id);
-                if (!exists) {
-                  this.helpRequests = [message.data, ...this.helpRequests];
-                  this.notifyHelpRequests();
+                const isSeed = message.data.id.startsWith('req-seed') || message.data.id.includes('seed');
+                if (!isSeed) {
+                  const exists = this.helpRequests.some((r) => r.id === message.data.id);
+                  if (!exists) {
+                    this.helpRequests = [message.data, ...this.helpRequests];
+                    this.notifyHelpRequests();
+                  }
                 }
               }
               break;
@@ -693,27 +733,39 @@ export function subscribeHelpRequests(onData: (requests: HelpRequest[]) => void,
           const items: HelpRequest[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
-            items.push({
-              id: docSnap.id,
-              userId: data.userId || 'anon-user',
-              authorEmail: data.authorEmail || '',
-              requesterName: data.requesterName || 'Community Resident',
-              phoneMasked: data.phoneMasked || '+1 (555) ***-****',
-              locationName: data.locationName || 'Local Sector',
-              coordinates: data.coordinates || { lat: 37.7749, lng: -122.4194 },
-              category: data.category || 'shelter',
-              subCategory: data.subCategory || 'General Emergency Need',
-              urgency: data.urgency || 'today',
-              peopleCount: data.peopleCount || 1,
-              description: data.description || '',
-              specialNeeds: data.specialNeeds || [],
-              status: data.status || 'open',
-              createdAt: data.createdAt || 'Recent',
-              offersCount: data.offersCount || 0,
-              matchedVolunteer: data.matchedVolunteer,
-            });
+            // Filter out any mock/seed records - strictly genuine citizen submissions
+            if (
+              !docSnap.id.startsWith('req-seed') &&
+              !docSnap.id.includes('seed') &&
+              !data.userId?.startsWith('civic-resident-10') &&
+              !data.isAiGenerated &&
+              !data.isMock
+            ) {
+              items.push({
+                id: docSnap.id,
+                userId: data.userId || 'anon-user',
+                authorEmail: data.authorEmail || '',
+                requesterName: data.requesterName || 'Community Resident',
+                phoneMasked: data.phoneMasked || '+1 (555) ***-****',
+                locationName: data.locationName || 'Local Sector',
+                coordinates: data.coordinates || { lat: 37.7749, lng: -122.4194 },
+                category: data.category || 'shelter',
+                subCategory: data.subCategory || 'General Emergency Need',
+                urgency: data.urgency || 'today',
+                peopleCount: data.peopleCount || 1,
+                description: data.description || '',
+                specialNeeds: data.specialNeeds || [],
+                status: data.status || 'open',
+                createdAt: data.createdAt || 'Recent',
+                offersCount: data.offersCount || 0,
+                matchedVolunteer: data.matchedVolunteer,
+              });
+            }
           });
           onData(items);
+        } else {
+          // Genuine empty state - do not fallback to mock/seed data
+          onData([]);
         }
       },
       (error) => {
@@ -1084,7 +1136,8 @@ export async function saveUserProfileDoc(userId: string, profile: Partial<AuthUs
   if (!userId) return;
   try {
     const docRef = doc(db, USER_PROFILES_COLLECTION, userId);
-    await setDoc(
+    // Non-blocking write to avoid hanging the client if offline/slow
+    setDoc(
       docRef,
       {
         ...profile,
@@ -1092,7 +1145,7 @@ export async function saveUserProfileDoc(userId: string, profile: Partial<AuthUs
         updatedAt: serverTimestamp(),
       },
       { merge: true }
-    );
+    ).catch((e) => console.warn('Firestore user profile write notice:', e));
   } catch (e) {
     console.warn('Firestore user profile write notice:', e);
   }
@@ -1105,8 +1158,8 @@ export async function getUserProfileDoc(userId: string): Promise<(Partial<AuthUs
   if (!userId) return null;
   try {
     const docRef = doc(db, USER_PROFILES_COLLECTION, userId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const docSnap = await promiseWithTimeout(getDoc(docRef), 2000, null);
+    if (docSnap && docSnap.exists()) {
       return docSnap.data() as (Partial<AuthUser> & { password?: string });
     }
     return null;
@@ -1128,8 +1181,8 @@ export async function findUserProfileByEmail(email: string): Promise<(Partial<Au
       where('email', '==', cleanEmail),
       limit(1)
     );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
+    const snap = await promiseWithTimeout(getDocs(q), 2000, null);
+    if (snap && !snap.empty) {
       const docData = snap.docs[0].data();
       return {
         ...docData,

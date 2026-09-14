@@ -68,6 +68,8 @@ import { AgroAdvisoryView } from './AgroAdvisoryView';
 import { IMDAlertsView } from './IMDAlertsView';
 import { IMDAlertBanner } from './IMDAlertBanner';
 import { WeatherResponseCard } from './WeatherResponseCard';
+import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 
 interface WeatherGPTModuleProps {
   userLocation: Coordinates;
@@ -77,6 +79,9 @@ interface WeatherGPTModuleProps {
   onSelectMapItem?: (item: any) => void;
   onSwitchTab?: (tab: any) => void;
   onBackToMap?: () => void;
+  activeDistressSignal?: any;
+  onFocusMap?: () => void;
+  onNavigateTab?: (tab: any) => void;
 }
 
 export type PersonaType = 'general' | 'farmer' | 'fisherman' | 'commuter' | 'trekker' | 'sdma' | 'rural';
@@ -254,7 +259,13 @@ export const WeatherGPTModule: React.FC<WeatherGPTModuleProps> = ({
   onOpenAidRequestModal,
   onSwitchTab,
   onBackToMap,
+  activeDistressSignal,
+  onFocusMap,
+  onNavigateTab,
 }) => {
+  const { language: appLanguage, setLanguage: setAppLanguage, t } = useLanguage();
+  const { theme } = useTheme();
+
   const [unit, setUnit] = useState<'C' | 'F'>('C');
   const [isLoadingForecast, setIsLoadingForecast] = useState<boolean>(true);
   const [currentWeather, setCurrentWeather] = useState<CurrentWeatherState | null>(null);
@@ -279,7 +290,19 @@ export const WeatherGPTModule: React.FC<WeatherGPTModuleProps> = ({
 
   // Persona & Language Selection
   const [selectedPersona, setSelectedPersona] = useState<PersonaType>('general');
-  const [selectedLanguage, setSelectedLanguage] = useState<string>('english');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => appLanguage || 'english');
+
+  // Keep internal language synchronized with global language context
+  useEffect(() => {
+    if (appLanguage && appLanguage !== selectedLanguage) {
+      setSelectedLanguage(appLanguage);
+    }
+  }, [appLanguage]);
+
+  const handleLanguageChange = (newLang: string) => {
+    setSelectedLanguage(newLang);
+    setAppLanguage(newLang as any);
+  };
 
   // Speech Recognition & Voice States
   const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
@@ -1494,7 +1517,7 @@ export const WeatherGPTModule: React.FC<WeatherGPTModuleProps> = ({
                 <span className="text-xs text-slate-300 font-bold">Language:</span>
                 <select
                   value={selectedLanguage}
-                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
                   className="bg-slate-950 border border-white/15 text-white text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:border-sky-500 font-bold"
                 >
                   {INDIC_LANGUAGES.map((l) => (

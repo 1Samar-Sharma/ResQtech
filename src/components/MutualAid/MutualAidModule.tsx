@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   HeartHandshake,
   Home,
@@ -186,8 +186,19 @@ export const MutualAidModule: React.FC<MutualAidModuleProps> = ({
     setActiveTab('board');
   };
 
+  // Filter out any AI-generated seeds or mock placeholders - genuine human submissions only
+  const genuineRequests = useMemo(() => {
+    return helpRequests.filter((req) => {
+      if (!req) return false;
+      if (req.id?.startsWith('req-seed') || req.id?.includes('seed')) return false;
+      if (req.userId?.startsWith('civic-resident-10')) return false;
+      if ((req as any).isAiGenerated || (req as any).isMock) return false;
+      return true;
+    });
+  }, [helpRequests]);
+
   // Filter requests
-  const filteredRequests = helpRequests.filter((req) => {
+  const filteredRequests = genuineRequests.filter((req) => {
     if (categoryFilter !== 'all' && req.category !== categoryFilter) return false;
     if (urgencyFilter !== 'all' && req.urgency !== urgencyFilter) return false;
     if (searchQuery) {
@@ -241,7 +252,7 @@ export const MutualAidModule: React.FC<MutualAidModuleProps> = ({
                   : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
               }`}
             >
-              Aid Board ({helpRequests.length})
+              Aid Board ({genuineRequests.length})
             </button>
 
             <button
@@ -476,16 +487,25 @@ export const MutualAidModule: React.FC<MutualAidModuleProps> = ({
           </div>
 
           {filteredRequests.length === 0 && (
-            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-8 text-center text-slate-400 text-xs space-y-2">
-              <HeartHandshake className="w-8 h-8 mx-auto text-slate-500" />
-              <p className="font-bold text-slate-300">No active aid requests matching filters.</p>
-              <p>Be the first to post if you or a neighbor needs emergency support in your area.</p>
-              <button
-                onClick={() => setActiveTab('request')}
-                className="mt-2 px-4 py-2 rounded-xl bg-amber-400 text-black font-bold"
-              >
-                Post an Aid Request
-              </button>
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-8 text-center text-slate-400 text-xs space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <HeartHandshake className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-bold text-slate-200 text-sm">No Active Emergency Requests</p>
+                <p className="text-slate-400 max-w-md mx-auto text-[11px] leading-relaxed">
+                  Only verified, genuine requests submitted by real community members are shown here. No automated or AI-generated placeholders are used to fill this space.
+                </p>
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => setActiveTab('request')}
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-extrabold shadow-lg shadow-amber-400/20 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Post an Aid Request</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

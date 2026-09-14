@@ -37,8 +37,12 @@ import { HomeScreen } from './components/Home/HomeScreen';
 import { ForecastScreen } from './components/Forecast/ForecastScreen';
 import { AlertsScreen } from './components/Alerts/AlertsScreen';
 import { CivicReliefScreen } from './components/CivicRelief/CivicReliefScreen';
+import { AskScreen } from './components/Ask/AskScreen';
+import { CitizenScreen } from './components/Citizen/CitizenScreen';
+import { ProfileScreen } from './components/Profile/ProfileScreen';
 import { BottomNavigation } from './components/Navigation/BottomNavigation';
 import { AboutModal } from './components/About/AboutModal';
+import { SettingsModal } from './components/Settings/SettingsModal';
 import { useWeatherData } from './hooks/useWeatherData';
 import { useAuth } from './context/AuthContext';
 import {
@@ -91,20 +95,24 @@ export default function App() {
     setIsRulesModalOpen,
   } = useAuth();
 
-  // Navigation View State - WeatherGPT is Primary for SIH PS 26068
+  // Navigation View State: Ask | Citizen | Forecast | Alerts | Profile | Help | Map
   const [activeTab, setActiveTab] = useState<
-    | 'home'
     | 'ask'
+    | 'citizen'
     | 'forecast'
     | 'alerts'
+    | 'profile'
     | 'help'
     | 'weather_gpt'
     | 'map'
     | 'early_warning'
     | 'mutual_aid'
     | 'community'
-  >('home');
+    | 'personas'
+    | 'settings'
+  >('ask');
   const [isAboutModalOpen, setIsAboutModalOpen] = useState<boolean>(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
 
   // User Geolocation (Initialized from cache or default)
   const [userLocation, setUserLocation] = useState<Coordinates>(() => {
@@ -782,17 +790,17 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050810] text-slate-200 flex flex-col selection:bg-red-600 selection:text-white font-sans antialiased relative overflow-x-hidden pb-20 md:pb-0">
-      {/* Background Luminous Ambient Glow Orbs */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+    <div className="min-h-screen bg-white dark:bg-[#050810] text-slate-900 dark:text-slate-200 flex flex-col selection:bg-sky-500 selection:text-white font-sans antialiased relative overflow-x-hidden pb-20 md:pb-0 transition-colors">
+      {/* Background Luminous Ambient Glow Orbs (Only active in dark mode) */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-0 dark:opacity-100 transition-opacity">
         <div className="absolute top-[-10%] left-[-10%] w-[55%] h-[55%] bg-blue-600/15 rounded-full blur-[140px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-red-600/10 rounded-full blur-[130px]" />
         <div className="absolute top-[25%] right-[5%] w-[35%] h-[35%] bg-emerald-600/10 rounded-full blur-[130px]" />
         <div className="absolute top-[65%] left-[5%] w-[35%] h-[35%] bg-purple-600/10 rounded-full blur-[130px]" />
         <div
-          className="absolute inset-0 opacity-20 pointer-events-none"
+          className="absolute inset-0 opacity-10 dark:opacity-20 pointer-events-none"
           style={{
-            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(rgba(100, 116, 139, 0.25) 1px, transparent 1px)',
             backgroundSize: '30px 30px',
           }}
         />
@@ -805,6 +813,7 @@ export default function App() {
           onTabChange={setActiveTab}
           onOpenAIAdvisor={() => setIsAIAdvisorOpen(true)}
           onOpenAboutModal={() => setIsAboutModalOpen(true)}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
           onTriggerGlobalSOS={() => setIsGlobalSOSOpen(true)}
           onOpenBroadcastModal={() => setIsBroadcastModalOpen(true)}
           onOpenDeckModal={() => setIsDeckModalOpen(true)}
@@ -868,17 +877,17 @@ export default function App() {
         )}
 
         {/* Live Area Telemetry Bar */}
-        <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-3.5 shadow-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="bg-white dark:bg-[#0c1322] border border-slate-200 dark:border-white/10 rounded-2xl p-3.5 shadow-sm dark:shadow-xl flex flex-wrap items-center justify-between gap-3 text-xs transition-colors">
           <div className="flex items-center gap-2.5">
-            <div className="h-3 w-3 rounded-full bg-emerald-500 animate-ping" />
-            <div className="flex items-center gap-1.5 font-semibold text-white">
-              <Compass className="w-4 h-4 text-emerald-400" />
-              <span>Area Detected:</span>
-              <span className="text-emerald-300 font-bold">{userAddress}</span>
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+            <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-white">
+              <Compass className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-slate-500 dark:text-slate-400">Area:</span>
+              <span className="text-slate-900 dark:text-emerald-300 font-bold">{userAddress}</span>
             </div>
             {gpsAccuracyMeters && (
-              <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                ±{gpsAccuracyMeters}m accuracy
+              <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 font-medium">
+                ±{gpsAccuracyMeters}m
               </span>
             )}
           </div>
@@ -887,27 +896,19 @@ export default function App() {
             <button
               onClick={detectLiveLocation}
               disabled={isLocating}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 border border-white/10 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-white/[0.05] dark:hover:bg-white/[0.1] dark:text-slate-200 border border-slate-200 dark:border-white/10 text-xs font-semibold transition-all cursor-pointer"
               title="Detect my current live GPS"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
-              <span>{isLocating ? 'Locking GPS...' : 'Detect Real GPS'}</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ${isLocating ? 'animate-spin' : ''}`} />
+              <span>{isLocating ? 'Locking GPS...' : 'Detect GPS'}</span>
             </button>
 
             <button
               onClick={() => setIsLocationSelectorOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 border border-white/10 text-xs font-semibold transition-all"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-white/[0.05] dark:hover:bg-white/[0.1] dark:text-slate-200 border border-slate-200 dark:border-white/10 text-xs font-semibold transition-all cursor-pointer"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+              <SlidersHorizontal className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
               <span>Switch Zone</span>
-            </button>
-
-            <button
-              onClick={() => setIsBroadcastModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(239,68,68,0.4)] border border-red-400/40 transition-all animate-pulse"
-            >
-              <Radio className="w-3.5 h-3.5 text-white" />
-              <span>Broadcast 5km Signal</span>
             </button>
           </div>
         </div>
@@ -1088,46 +1089,31 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* VIEW 1: HOME SCREEN (WeatherGPT Primary Product View) */}
+        {/* VIEW 1: ASK (Conversational WeatherGPT AI Assistant - Clean & Fast) */}
         {/* ========================================================================= */}
-        {activeTab === 'home' && (
-          <HomeScreen
+        {(activeTab === 'ask' || (activeTab as string) === 'home') && (
+          <AskScreen
             userLocation={userLocation}
             userAddress={userAddress}
-            isGpsLocked={isGpsLocked}
-            onRefreshLocation={detectLiveLocation}
             currentWeather={currentWeather}
-            dailyForecast={dailyForecast}
-            hourlyForecast={hourlyForecast}
-            imdAlerts={imdAlerts}
             isLoadingForecast={isLoadingForecast}
-            onRefreshForecast={refreshWeather}
-            unit={unit}
-            onToggleUnit={toggleUnit}
-            activeAlertsCount={disasterAlerts.length + imdAlerts.length}
-            onAskWeatherGPT={(query, persona) => {
-              setActiveTab('ask');
-            }}
-            onNavigateTab={(tab) => setActiveTab(tab)}
-            onOpenAboutModal={() => setIsAboutModalOpen(true)}
-            onOpenBroadcastModal={() => setIsBroadcastModalOpen(true)}
-            onOpenEmergency={() => setIsBroadcastModalOpen(true)}
+            onRefreshWeather={refreshWeather}
+            onNavigateTab={(tab) => setActiveTab(tab as any)}
+            onOpenSOS={() => setIsGlobalSOSOpen(true)}
           />
         )}
 
         {/* ========================================================================= */}
-        {/* VIEW 2: ASK (Conversational WeatherGPT AI Assistant) */}
+        {/* VIEW 2: CITIZEN (Specialized Weather Assistance for Different People) */}
         {/* ========================================================================= */}
-        {(activeTab === 'ask' || activeTab === 'weather_gpt') && (
-          <WeatherGPTModule
+        {(activeTab === 'citizen' || activeTab === 'personas') && (
+          <CitizenScreen
             userLocation={userLocation}
             userAddress={userAddress}
-            onLaunchBroadcastModal={(initialData) => {
-              setIsBroadcastModalOpen(true);
-            }}
-            onOpenAidRequestModal={handleOpenAidRequestFromWeather}
-            onSwitchTab={(tab) => setActiveTab(tab)}
-            onBackToMap={() => setActiveTab('map')}
+            currentWeather={currentWeather}
+            onOpenSOS={() => setIsGlobalSOSOpen(true)}
+            onOpenBroadcast={() => setIsBroadcastModalOpen(true)}
+            onNavigateTab={(tab) => setActiveTab(tab as any)}
           />
         )}
 
@@ -1198,7 +1184,41 @@ export default function App() {
             onVoteReport={handleVoteCommunityReport}
             onSubmitReport={handleSubmitCommunityReport}
             onAnalyzeReportWithAI={handleAnalyzeAlertWithAI}
-            onNavigateTab={(tab) => setActiveTab(tab)}
+            onNavigateTab={(tab) => setActiveTab(tab as any)}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* VIEW 6: PROFILE (Account, Preferences, Language, Theme, SOS & System Info) */}
+        {/* ========================================================================= */}
+        {(activeTab === 'profile' || activeTab === 'settings') && (
+          <ProfileScreen
+            userAddress={userAddress}
+            isGpsLocked={isGpsLocked}
+            onDetectLocation={detectLiveLocation}
+            onOpenLocationSelector={() => setIsLocationSelectorOpen(true)}
+            onOpenSOS={() => setIsGlobalSOSOpen(true)}
+            onOpenBroadcast={() => setIsBroadcastModalOpen(true)}
+            onOpenRules={() => setIsRulesModalOpen(true)}
+            onOpenDeck={() => setIsDeckModalOpen(true)}
+            onOpenAbout={() => setIsAboutModalOpen(true)}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* DEEP WEATHER ADVISOR: WeatherGPT Deep Multi-Tool Engine (Preserved) */}
+        {/* ========================================================================= */}
+        {(activeTab === 'weather_gpt' || (activeTab as string) === 'deep_advisor') && (
+          <WeatherGPTModule
+            userLocation={userLocation}
+            userAddress={userAddress}
+            onLaunchBroadcastModal={(initialData) => {
+              setIsBroadcastModalOpen(true);
+            }}
+            onOpenAidRequestModal={handleOpenAidRequestFromWeather}
+            activeDistressSignal={activeSignal}
+            onFocusMap={() => setActiveTab('map')}
+            onNavigateTab={(tab) => setActiveTab(tab as any)}
           />
         )}
       </main>
@@ -1416,13 +1436,23 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Mobile-first Persistent Bottom Navigation Bar */}
+      {/* Mobile-first Persistent Bottom Navigation Bar (Ask | Citizen | Alerts | Profile) */}
       <BottomNavigation
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        alertCount={disasterAlerts.length + imdAlerts.length}
-        helpCount={helpRequests.length}
-        onOpenEmergency={() => setIsBroadcastModalOpen(true)}
+        activeAlertCount={disasterAlerts.length + imdAlerts.length}
+        openHelpRequestCount={helpRequests.length}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+      />
+
+      {/* Settings & Accessibility Modal */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        userAddress={userAddress}
+        onDetectGPS={detectLiveLocation}
+        onChangeArea={() => setIsLocationSelectorOpen(true)}
+        isLocating={isLocating}
       />
 
       {/* About WeatherGPT System Modal */}

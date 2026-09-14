@@ -123,7 +123,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onOpenD
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400 font-sans">Master Admin:</span>
-              <span className="text-slate-200">chinchintu2000@gmail.com</span>
+              <span className="text-emerald-300 font-sans font-semibold">Authorized ResQtech Authority</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400 font-sans">Android Mobile:</span>

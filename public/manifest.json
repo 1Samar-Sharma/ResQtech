@@ -1,14 +1,42 @@
 {
   "name": "WeatherGPT & ResQTech",
   "short_name": "WeatherGPT",
-  "start_url": "/",
-  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "id": "/?source=pwa",
   "display": "standalone",
-  "orientation": "any",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
   "background_color": "#050810",
   "theme_color": "#050810",
   "description": "Conversational AI for weather forecasting, alerts, disaster relief, and climate intelligence powered by Firebase and Gemini.",
   "categories": ["weather", "utilities", "safety"],
+  "lang": "en-IN",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Ask WeatherGPT",
+      "short_name": "Ask AI",
+      "description": "Chat directly with WeatherGPT assistant",
+      "url": "/?tab=ask",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Emergency Radar",
+      "short_name": "Radar",
+      "description": "View live radar and hazard map",
+      "url": "/?tab=map",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Disaster Alerts",
+      "short_name": "Alerts",
+      "description": "View active weather & civic warnings",
+      "url": "/?tab=alerts",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
