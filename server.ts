@@ -1940,9 +1940,7 @@ app.get('/api/geo/ip-location', async (req: Request, res: Response) => {
 
   return res.json({
     success: false,
-    lat: 37.7749,
-    lng: -122.4194,
-    formattedAddress: 'San Francisco, CA, USA',
+    error: 'IP location unavailable',
   });
 });
 
@@ -2701,22 +2699,32 @@ async function resolveLocationForQuery(
   if (!query) return { loc: defaultLoc, lat: defaultLat, lng: defaultLng };
 
   const q = query.trim();
-  const locationMatch =
-    q.match(/\b(?:in|at|for|near|around|of)\s+([A-Za-z\s]{2,30})/i) ||
-    q.match(/^([A-Za-z\s]{2,20})\s+(?:weather|temperature|forecast|rain|climate|alerts?)/i) ||
-    q.match(/(?:weather|temperature|forecast|rain|climate|alerts?)\s+(?:in|for|at)?\s*([A-Za-z\s]{2,20})/i);
 
-  let targetPlace = locationMatch ? locationMatch[1].trim() : null;
+  // Check destination in travel queries first (e.g. "I'm travelling to Manali tomorrow morning", "Trip to Shimla")
+  const travelMatch = q.match(/\b(?:travelling\s+to|traveling\s+to|trip\s+to|heading\s+to|going\s+to|visiting|drive\s+to)\s+([A-Za-z\s]{2,25})/i);
+  let targetPlace: string | null = null;
+  if (travelMatch) {
+    targetPlace = travelMatch[1].trim();
+  } else {
+    const locationMatch =
+      q.match(/\b(?:in|at|for|near|around|of)\s+([A-Za-z\s]{2,30})/i) ||
+      q.match(/^([A-Za-z\s]{2,20})\s+(?:weather|temperature|forecast|rain|climate|alerts?)/i) ||
+      q.match(/(?:weather|temperature|forecast|rain|climate|alerts?)\s+(?:in|for|at)?\s*([A-Za-z\s]{2,20})/i);
+
+    targetPlace = locationMatch ? locationMatch[1].trim() : null;
+  }
+
   if (targetPlace) {
     targetPlace = targetPlace
-      .replace(/\b(today|tomorrow|now|tonight|weekend|please|tell|me|what|is|the|how|will|it|going|to|my|crop|crops|field|wheat|rice|sea|trail|hike|family)\b/gi, '')
+      .replace(/\b(today|tomorrow|now|tonight|weekend|morning|afternoon|evening|night|please|tell|me|what|is|the|how|will|it|going|to|my|crop|crops|field|wheat|rice|sea|trail|hike|family|should|i|go|out|can|we)\b/gi, '')
       .trim();
   }
 
   const falsePlaceWords = [
     'here', 'my area', 'my location', 'current location', 'this place',
     'crop', 'crops', 'wheat', 'rice', 'pesticide', 'spray', 'spraying',
-    'trail', 'trek', 'mountain', 'sea', 'boat', 'commute', 'travel'
+    'trail', 'trek', 'mountain', 'sea', 'boat', 'commute', 'travel',
+    'outside', 'school', 'office', 'home', 'work'
   ];
 
   if (
@@ -2738,6 +2746,7 @@ async function resolveLocationForQuery(
     } catch {}
   }
 
+  // If no explicit destination or location is specified in the question, strictly use the user's real GPS/selected location
   return { loc: defaultLoc, lat: defaultLat, lng: defaultLng };
 }
 
@@ -2752,12 +2761,17 @@ function detectQueryLanguage(queryText: string, fallbackLanguage: string = 'engl
 
   if (!text) return defaultObj;
 
-  // Devanagari script: Hindi / Marathi / Sanskrit / Nepali
+  // 1. Script-based identification
+  // Devanagari script: Hindi / Marathi
   if (/[\u0900-\u097F]/.test(text)) {
     if (/\b(आहे|नाही|काय|कसा|कशी|पाऊस|पडेल|होईल|कधी|सांगा|घ्या|वारा|हवामान|थंडी|उकाडा)\b/i.test(text)) {
       return { code: 'mr', name: 'Marathi', speechLocale: 'mr-IN' };
     }
     return { code: 'hi', name: 'Hindi', speechLocale: 'hi-IN' };
+  }
+  // Gurmukhi (Punjabi)
+  if (/[\u0A00-\u0A7F]/.test(text)) {
+    return { code: 'pa', name: 'Punjabi', speechLocale: 'pa-IN' };
   }
   // Bengali / Assamese
   if (/[\u0980-\u09FF]/.test(text)) {
@@ -2774,10 +2788,6 @@ function detectQueryLanguage(queryText: string, fallbackLanguage: string = 'engl
   // Gujarati
   if (/[\u0A80-\u0AFF]/.test(text)) {
     return { code: 'gu', name: 'Gujarati', speechLocale: 'gu-IN' };
-  }
-  // Punjabi (Gurmukhi)
-  if (/[\u0A00-\u0A7F]/.test(text)) {
-    return { code: 'pa', name: 'Punjabi', speechLocale: 'pa-IN' };
   }
   // Kannada
   if (/[\u0C80-\u0CFF]/.test(text)) {
@@ -2796,20 +2806,25 @@ function detectQueryLanguage(queryText: string, fallbackLanguage: string = 'engl
     return { code: 'ur', name: 'Urdu', speechLocale: 'ur-IN' };
   }
 
-  // Phonetic Punjabi in Latin:
-  if (/\b(ki|kida|kiddan|ajj|kall|kallh|meenh|varsa|hovega|hovegi|thand|garmi|dass|dasso|chhatri)\b/i.test(text)) {
+  // 2. Phonetic Punjabi in Latin characters
+  if (/\b(ki|kida|kiddan|ajj|kall|kallh|meenh|varsa|hovega|hovegi|thand|garmi|dass|dasso|chhatri|theek)\b/i.test(text)) {
     return { code: 'pa', name: 'Punjabi', speechLocale: 'pa-IN' };
   }
 
-  // Phonetic Hinglish / Hindi in Latin script:
-  const hinglishPatterns = /\b(aaj|kal|barish|baaris|barsat|barsaat|barsega|barsegi|mausam|mosam|hoga|hogi|hoge|honge|kaisa|kaisi|kaise|kya|kyu|kyun|kab|pani|paani|taapman|tapman|thand|sardi|garmi|dhoop|hawa|toofan|tufan|batao|bataiye|chhati|chata|chhatri|safe hai|khatra|kheti|fasal|faslo|bijli|badal)\b/i;
-  if (hinglishPatterns.test(text)) {
-    return { code: 'hi', name: 'Hindi', speechLocale: 'hi-IN' };
+  // 3. Common English Words & Phrases (Priority check for English queries in Latin alphabet)
+  const englishPatterns = /\b(i'm|i am|should|need|spray|orchard|apple|trekking|hike|farmer|school|children|travel|travelling|traveling|going|tomorrow|today|tonight|weather|rain|forecast|wind|storm|safe|alert|is|are|will|can|what|how|when|where|does|out|outside|umbrella|temperature|afternoon|morning)\b/i;
+  if (englishPatterns.test(text)) {
+    // Make sure it doesn't have predominant Hinglish words
+    const hinglishCount = (text.match(/\b(aaj|kal|barish|barsat|mausam|karein|kya|kyun|kaisa|khet|fasal|pani)\b/gi) || []).length;
+    if (hinglishCount === 0) {
+      return { code: 'en', name: 'English', speechLocale: 'en-IN' };
+    }
   }
 
-  // Clear English patterns:
-  if (/\b(what|when|where|will|is|are|how|does|can|show|tell|rain|weather|temperature|forecast|wind|cloud|sunny|storm|humidity|flood|today|tomorrow)\b/i.test(text)) {
-    return { code: 'en', name: 'English', speechLocale: 'en-IN' };
+  // 4. Phonetic Hinglish / Hindi in Latin script
+  const hinglishPatterns = /\b(aaj|kal|barish|baaris|barsat|barsaat|barsega|barsegi|mausam|mosam|hoga|hogi|hoge|honge|kaisa|kaisi|kaise|kya|kyu|kyun|kab|pani|paani|taapman|tapman|thand|sardi|garmi|dhoop|hawa|toofan|tufan|batao|bataiye|chhati|chata|chhatri|safe hai|khatra|kheti|fasal|faslo|bijli|badal|jaana|jana|chahta|chahti|chahiye|sakta|sakti|khet|kisan)\b/i;
+  if (hinglishPatterns.test(text)) {
+    return { code: 'hi', name: 'Hindi', speechLocale: 'hi-IN' };
   }
 
   return defaultObj;
@@ -2905,7 +2920,7 @@ export function extractSituationContext(
   const windGustKmh = Math.round(targetDay?.windGustMaxKmh ?? (windKmh * 1.35));
   const targetSummary = `${condition}, High: ${maxTempC}°C, Low: ${minTempC}°C, Rain: ${precipProb}% (${precipMm} mm), Winds: ${windKmh} km/h`;
 
-  // 3. Grounded baseline risk calculation (mathematically tied to telemetry)
+  // 3. Grounded baseline risk calculation (strictly tied to telemetry, no invented hazards)
   const hasRed = imdAlerts.some((a) => a.colorCode === 'red') || liveAlerts.some((a) => a.severity === 'emergency');
   const hasOrange = imdAlerts.some((a) => a.colorCode === 'orange') || liveAlerts.some((a) => a.severity === 'warning');
   const hasYellow = imdAlerts.some((a) => a.colorCode === 'yellow') || liveAlerts.some((a) => a.severity === 'watch');
@@ -2915,22 +2930,22 @@ export function extractSituationContext(
 
   if (hasRed || windKmh >= 60 || precipMm >= 50) {
     baselineRisk = 'Severe';
-    riskReason = `Severe threshold: Wind gusts ${windKmh} km/h or heavy rainfall (${precipMm} mm) with active emergency alert.`;
+    riskReason = `Severe conditions: Sustained high winds (${windKmh} km/h) or heavy rainfall accumulation (${precipMm} mm) with active emergency alert.`;
   } else if (hasOrange || windKmh >= 45 || precipMm >= 25 || precipProb >= 80) {
     baselineRisk = 'High';
-    riskReason = `High risk: Precipitation probability is ${precipProb}% (${precipMm} mm) with strong gusts up to ${windGustKmh} km/h.`;
+    riskReason = `High risk: High precipitation likelihood (${precipProb}%, ${precipMm} mm) with gusty winds up to ${windGustKmh} km/h.`;
   } else if (hasYellow || windKmh >= 25 || precipMm >= 6 || precipProb >= 35) {
     baselineRisk = 'Moderate';
-    riskReason = `Moderate risk: Precipitation probability is ${precipProb}% (${precipMm} mm) with surface winds around ${windKmh} km/h.`;
+    riskReason = `Moderate risk: Precipitation chance is ${precipProb}% (${precipMm} mm) with surface winds around ${windKmh} km/h.`;
   } else {
     baselineRisk = 'Low';
-    riskReason = `Low risk: Precipitation chance is ${precipProb}% (${precipMm} mm) with mild winds (${windKmh} km/h) and no severe warnings.`;
+    riskReason = `Low risk: Precipitation chance is only ${precipProb}% (${precipMm} mm) with mild winds (${windKmh} km/h) and no severe warnings.`;
   }
 
   // 4. Activity & Persona Extraction
   let persona: 'farmer' | 'fisherman' | 'trekker' | 'commuter' | 'family' | 'sdma' | 'general' = 'general';
   let activityName = 'Outdoor Activity';
-  let safetyConcern = 'General weather safety precautions';
+  let safetyConcern = 'General weather safety and movement';
   let destination: string | null = null;
   let intent: 'situation_decision' | 'weather_forecast' | 'ambiguous_clarification' = 'situation_decision';
   let clarificationNeeded = false;
@@ -2940,12 +2955,12 @@ export function extractSituationContext(
   // Trekker keywords
   if (/\b(trek|trekk|trekker|trekkers|trekking|hike|hiker|hikers|hiking|trail|trails|climb|climber|climbers|climbing|mountain|mountains|mountaineering|camp|camper|campers|camping|peak|pass|glacier|altitude)\b|पहाड़|पर्वत|ट्रेक|पर्वतारोहण/i.test(q)) {
     persona = 'trekker';
-    activityName = 'Trekking';
-    safetyConcern = 'Wet and slippery trails, altitude wind chill, sudden convective showers, reduced visibility';
+    activityName = 'Trekking & Mountain Hiking';
+    safetyConcern = 'Wet and slippery trails, altitude wind chill, sudden convective showers, reduced ridge visibility';
     intent = 'situation_decision';
   }
   // Farmer keywords
-  else if (/\b(farm|farmer|farming|kisan|crop|crops|irrigate|irrigation|spray|spraying|pesticide|fertilizer|harvest|harvesting|sow|sowing|field|fields|orchard|wheat|rice|dhan|gehu|chana|fasal|kheti)\b|सिंचाई|फसल|कीटनाशक|बोआई|कटाई|खेत/i.test(q)) {
+  else if (/\b(farm|farmer|farming|kisan|crop|crops|irrigate|irrigation|spray|spraying|pesticide|fertilizer|harvest|harvesting|sow|sowing|field|fields|orchard|wheat|rice|dhan|gehu|chana|fasal|kheti|apple)\b|सिंचाई|फसल|कीटनाशक|बोआई|कटाई|खेत/i.test(q)) {
     persona = 'farmer';
     intent = 'situation_decision';
     if (/\b(spray|spraying|pesticide|fertilizer|foliar)\b|कीटनाशक/i.test(q)) {
@@ -2961,8 +2976,8 @@ export function extractSituationContext(
       activityName = 'Crop Sowing';
       safetyConcern = 'Seed wash-off and waterlogged germination beds';
     } else {
-      activityName = 'Farming Operations';
-      safetyConcern = 'Weather suitability for agricultural operations';
+      activityName = 'Agricultural Operations';
+      safetyConcern = 'Weather suitability for agricultural field operations';
     }
   }
   // Fisherman keywords
@@ -2985,17 +3000,17 @@ export function extractSituationContext(
     }
   }
   // Family keywords
-  else if (/\b(family|children|kids|child|school|elderly|grandparents|household|home|picnic|outdoor|playground)\b|घर|परिवार|बच्चे|स्कूल/i.test(q)) {
+  else if (/\b(family|children|kids|child|school|elderly|grandparents|household|home|picnic|playground)\b|घर|परिवार|बच्चे|स्कूल/i.test(q)) {
     persona = 'family';
     activityName = 'Family & School Commute';
-    safetyConcern = 'Children outdoor safety, apparent heat index, lightning precautions, sudden downpours';
+    safetyConcern = 'Children outdoor safety, apparent heat index, sudden downpours';
     intent = 'situation_decision';
   }
   // Disaster / Emergency / Active Alert keywords
   else if (/\b(alert|alerts|warning|warnings|heavy\s+rain|heavy\s+rainfall|downpour|flood|flooding|waterlog|waterlogging|cyclone|storm|landslide|evacuate|evacuation|sos|emergency|shelter)\b|बाढ़|तूफान|चेतावनी|आपदा|अलर्ट/i.test(q)) {
     persona = 'sdma';
     activityName = 'Disaster & Civic Safety';
-    safetyConcern = 'Heavy rainfall inundation, localized flash flood, emergency shelter readiness, power disruptions';
+    safetyConcern = 'Heavy rainfall inundation, localized waterlogging, emergency shelter readiness';
     intent = 'situation_decision';
   }
   // If no explicit keyword in query, check selectedPersona
@@ -3004,10 +3019,10 @@ export function extractSituationContext(
     persona = p;
     intent = 'situation_decision';
     if (p === 'trekker') {
-      activityName = 'Trekking';
-      safetyConcern = 'Trail slipperiness, high elevation wind chill, cloudburst risk';
+      activityName = 'Trekking & Mountain Hiking';
+      safetyConcern = 'Trail slipperiness, high elevation wind chill, ridge visibility';
     } else if (p === 'farmer') {
-      activityName = 'Farming Operations';
+      activityName = 'Agricultural Operations';
       safetyConcern = 'Impending rain, wind drift, soil moisture';
     } else if (p === 'fisherman') {
       activityName = 'Marine Fishing';
@@ -3017,16 +3032,18 @@ export function extractSituationContext(
       safetyConcern = 'Road visibility, heavy rain waterlogging';
     } else if (p === 'family') {
       activityName = 'Family & Outdoor Safety';
-      safetyConcern = 'Heat index, storm precautions, children outdoor commute';
+      safetyConcern = 'Heat index, sudden rain, children outdoor commute';
     }
   }
   // Ambiguity Detection: "I'm going out tomorrow", "Can I go out?", etc. without persona or activity
   else if (/\b(going\s+out|go\s+out|going\s+outside|step\s+out|stepping\s+out)\b|बाहर\s+जाना|बाहर\s+जा\s+रहा/i.test(q)) {
     intent = 'ambiguous_clarification';
+    activityName = 'General Outdoor Movement';
     clarificationNeeded = true;
     clarificationQuestion = isHindi
       ? 'क्या आप यात्रा (travel), ट्रेकिंग (trekking), खेती (farming), मछली पकड़ने (fishing) या किसी अन्य गतिविधि के लिए जा रहे हैं?'
       : 'Are you travelling, trekking, farming, fishing, or doing another activity?';
+    safetyConcern = 'Baseline outdoor movement precautions';
   }
   // Weather Forecast Question: "Will it rain tomorrow?", "Show weather", etc.
   else if (
@@ -3034,17 +3051,17 @@ export function extractSituationContext(
       q
     )
   ) {
-    intent = 'weather_forecast';
-    activityName = 'Weather Forecast Inquiry';
+    // Provide decision-support for general daily life and movement
+    intent = 'situation_decision';
+    persona = 'general';
+    activityName = 'Daily Commute & Outdoor Routines';
+    safetyConcern = 'Rain timing, umbrella necessity, and road transit conditions';
   } else {
-    // Default to situation decision if user is asking advice, e.g. "Should I go?"
-    if (/\b(should\s+i|can\s+i|is\s+it\s+safe|kya\s+mai)\b/i.test(q)) {
-      intent = 'situation_decision';
-      activityName = 'Outdoor Activity';
-    } else {
-      intent = 'weather_forecast';
-      activityName = 'General Weather Outlook';
-    }
+    // Default to situation decision for general daily life
+    intent = 'situation_decision';
+    persona = 'general';
+    activityName = 'Daily Commute & Outdoor Routines';
+    safetyConcern = 'General weather precautions and outdoor comfort';
   }
 
   return {
@@ -3163,7 +3180,50 @@ app.post('/api/ai/weather-gpt', async (req: Request, res: Response) => {
     // Calculate sea-state, agricultural & altitude telemetry
     const seaWaveHeightM = (Math.max(0.6, (currentConditions.windSpeedKmh * 0.08) + (currentConditions.precipitationMm > 5 ? 1.2 : 0.2))).toFixed(1);
     const seaRoughness = parseFloat(seaWaveHeightM) > 2.5 ? 'Rough Sea Alert (High Swell)' : parseFloat(seaWaveHeightM) > 1.5 ? 'Moderate Swell' : 'Calm to Slight';
-    const isCoastal = loc.toLowerCase().includes('kochi') || loc.toLowerCase().includes('mumbai') || loc.toLowerCase().includes('chennai') || loc.toLowerCase().includes('goa') || loc.toLowerCase().includes('vizag') || loc.toLowerCase().includes('coast') || loc.toLowerCase().includes('beach') || loc.toLowerCase().includes('sea') || loc.toLowerCase().includes('harbor');
+
+    // Section 8: Construct internal structured context object
+    const structuredContextObject = {
+      userQuestion: query,
+      detectedLanguage: detected.name,
+      location: {
+        placeName: loc,
+        latitude: lat,
+        longitude: lng,
+      },
+      dateTime: new Date().toISOString(),
+      persona: situationContext.persona,
+      activity: situationContext.activityName,
+      destination: situationContext.destination,
+      forecast: {
+        targetPeriod: situationContext.timeContext,
+        condition: situationContext.targetForecast.condition,
+        maxTempC: situationContext.targetForecast.maxTempC,
+        minTempC: situationContext.targetForecast.minTempC,
+        precipProbability: situationContext.targetForecast.precipProb,
+        precipMm: situationContext.targetForecast.precipMm,
+        windSpeedKmh: situationContext.targetForecast.windKmh,
+        windGustKmh: situationContext.targetForecast.windGustKmh,
+      },
+      currentWeather: {
+        temperatureC: currentConditions.temperatureC,
+        feelsLikeC: currentConditions.feelsLikeC,
+        condition: currentConditions.condition,
+        humidityPct: currentConditions.humidityPct,
+        windSpeedKmh: currentConditions.windSpeedKmh,
+        aqiIndex: currentConditions.aqiIndex,
+      },
+      alerts: liveAlerts.length > 0 ? liveAlerts : [],
+      imdStatus: imdColorStatus,
+      decisionTelemetry: {
+        baselineRisk: situationContext.baselineRisk,
+        riskReason: situationContext.riskReason,
+        safetyConcern: situationContext.safetyConcern,
+        spraySuitability,
+        soilMoisturePct: soilMoisture,
+        seaState: { waveHeightM: seaWaveHeightM, roughness: seaRoughness },
+        nwpConsensus,
+      },
+    };
 
     const ai = getGeminiClient();
     if (!ai) {
@@ -3191,106 +3251,81 @@ app.post('/api/ai/weather-gpt', async (req: Request, res: Response) => {
       });
     }
 
-    const systemPrompt = `You are WeatherGPT (SIH 26068 - MoES / IMD), a WEATHER + DISASTER DECISION SUPPORT SYSTEM (not simply a chatbot).
-Your core mission is to answer:
-"What does the current/future weather mean for THIS USER in THIS LOCATION and THIS SITUATION?"
+    const systemPrompt = `You are WeatherGPT (MoES / IMD decision intelligence system).
+You are not merely reporting weather.
+Interpret the provided weather and alert data in relation to the user's specific activity, persona, location and requested time.
+Give practical, concise decision-support advice.
+Never invent weather or hazard data.
 
 ============================================================
-CORE REASONING PIPELINE:
+INTERNAL STRUCTURED CONTEXT:
 ============================================================
-1. USER LOCATION: ${loc} (GPS: ${lat.toFixed(4)}, ${lng.toFixed(4)})
-2. USER SITUATION / ACTIVITY: ${situationContext.activityName} (${situationContext.timeContext})
-3. INTENT & PERSONA: ${situationContext.persona.toUpperCase()} (Intent: ${situationContext.intent})
-4. GROUNDED TELEMETRY FOR ${situationContext.timeContext}:
-   - Condition: ${situationContext.targetForecast.condition}
-   - Temperatures: High ${situationContext.targetForecast.maxTempC}°C / Low ${situationContext.targetForecast.minTempC}°C
-   - Rain Likelihood: ${situationContext.targetForecast.precipProb}% (${situationContext.targetForecast.precipMm} mm)
-   - Winds: ${situationContext.targetForecast.windKmh} km/h (Gusts: ${situationContext.targetForecast.windGustKmh} km/h)
-   - Current: ${currentConditions.temperatureC}°C, Feels Like: ${currentConditions.feelsLikeC}°C, Humidity: ${currentConditions.humidityPct}%, Wind: ${currentConditions.windSpeedKmh} km/h ${currentConditions.windDirection}, AQI: ${currentConditions.aqiIndex}
-   - Sounding: CAPE ${nwpSounding.capeJkg} J/kg, Lifted Index ${nwpSounding.liftedIndex}, Storm Threat: ${nwpSounding.stormPotential.toUpperCase()}
-   - Agro Telemetry: Spray Window: ${spraySuitability}, Soil Moisture: ${soilMoisture}%, ET0: ${et0Rate} mm/day
-   - IMD Status: ${imdColorStatus}
-   - Active Disaster Feeds: ${activeAlertsSummary}
-5. RISK & IMPACT ANALYSIS:
-   - Grounded Risk Level: ${situationContext.baselineRisk}
-   - Risk Justification: ${situationContext.riskReason}
-   - Key Safety Concern: ${situationContext.safetyConcern}
-6. ACTIONABLE DECISION:
-   - Specific advice tailored to ${situationContext.activityName} in ${loc} for ${situationContext.timeContext}.
+${JSON.stringify(structuredContextObject, null, 2)}
 
 ============================================================
-LANGUAGE IDENTIFICATION AND ADAPTATION MANDATE:
+LANGUAGE MANDATE:
 ============================================================
-1. The user query is: "${query}".
-2. Identified language: "${detected.name}" (Code: "${detected.code}", Locale: "${detected.speechLocale}").
-3. You MUST formulate the ENTIRE reply in the EXACT SAME LANGUAGE as the user's question!
-   - If user asks in Hindi (Devanagari, or Hinglish like "aaj barish hogi kya", "kya kal ja sakta hu"), reply in fluent, natural Hindi (Devanagari script)!
-   - If user asks in Bengali, reply in Bengali!
-   - If user asks in Tamil, reply in Tamil!
-   - If user asks in Telugu, reply in Telugu!
-   - If user asks in Marathi, reply in Marathi!
-   - If user asks in Punjabi, reply in Punjabi!
-   - If user asks in English, reply in English!
+The user asked: "${query}".
+The query language is "${detected.name}".
+You MUST formulate your reply entirely in "${detected.name}"!
+Do NOT switch to English if the user asked in Hindi, Punjabi, or another language!
+Translate the section headers appropriately into "${detected.name}".
 
 ============================================================
-REQUIRED RESPONSE STRUCTURE FOR "replyText":
+MANDATE FOR RESPONSE FORMAT:
 ============================================================
-${situationContext.intent === 'ambiguous_clarification' ? `
-The query is ambiguous (e.g. user says "I'm going out tomorrow" without specifying activity or role).
-In "replyText", ask ONLY the minimal clarification question in the detected language:
-"${situationContext.clarificationQuestion}"
-Do NOT ask unnecessary questions.
-` : situationContext.intent === 'weather_forecast' ? `
-Provide a direct, high-contrast, structured weather forecast for ${loc} (${situationContext.timeContext}):
-- Expected condition & temperatures (High / Low)
-- Rain likelihood & precipitation volume in mm
-- Wind speeds & gusts
-- Official IMD / disaster alert status
-` : `
-Structure "replyText" strictly into the following 5 markdown sections:
+Format "replyText" strictly using the following simple, scannable 4 sections:
 
-### ${situationContext.activityName.toUpperCase()} OUTLOOK (${situationContext.timeContext.toUpperCase()})
-[Expected weather in ${loc} for ${situationContext.timeContext} in 1-2 clear sentences with temperatures and condition]
+### 🌦 WEATHER
+[What the actual forecast says for ${loc} during ${situationContext.timeContext}: conditions, temperatures (High/Low), rain probability & mm, and wind.]
 
-### WHAT IT MEANS FOR YOU
-[Specific practical impact on ${situationContext.activityName} — e.g. trail slipperiness, wind drift, spray wash-off, road pooling, sea roughness]
+### 👤 FOR YOUR SITUATION
+[What those conditions mean for the user's activity (${situationContext.activityName}) and situation. ${situationContext.intent === 'ambiguous_clarification' ? `Include baseline advice plus: "Are you travelling, trekking, farming, fishing, or doing another activity? Let me know for specialized guidance."` : ''}]
 
-### RISK
-**${situationContext.baselineRisk}** — [Risk level: Low / Moderate / High / Severe strictly justified by the telemetry. One sentence reason.]
+### ⚠️ RISK
+**${situationContext.baselineRisk}** — [Risk level strictly justified by the data. One clear sentence explaining why.]
 
-### WHAT YOU SHOULD DO
-[2-3 concrete actionable recommendations — e.g. start early, postpone, carry waterproofs, check drainage]
+### ✅ WHAT TO DO
+[1 to 3 clear, practical, actionable recommendations tailored to this user.]
 
-### WHY
-[Short explanation based directly on the retrieved forecast data and alerts]
-
-If replying in Hindi, translate the section titles naturally:
-### ${situationContext.activityName} आउटलुक (${situationContext.timeContext})
+${detected.code === 'hi' ? `
+In Hindi, use:
+### 🌦 मौसम
 ...
-### आपके लिए इसका क्या अर्थ है
+### 👤 आपकी स्थिति के लिए
 ...
-### जोखिम: ${situationContext.baselineRisk === 'Severe' ? 'गंभीर (Severe)' : situationContext.baselineRisk === 'High' ? 'उच्च (High)' : situationContext.baselineRisk === 'Moderate' ? 'मध्यम (Moderate)' : 'कम (Low)'}
+### ⚠️ जोखिम
+**${situationContext.baselineRisk === 'Severe' ? 'गंभीर' : situationContext.baselineRisk === 'High' ? 'उच्च' : situationContext.baselineRisk === 'Moderate' ? 'मध्यम' : 'कम'}** — ...
+### ✅ आपको क्या करना चाहिए
+- ...
+` : detected.code === 'pa' ? `
+In Punjabi, use:
+### 🌦 ਮੌਸਮ
 ...
-### आपको क्या करना चाहिए
+### 👤 ਤੁਹਾਡੀ ਸਥਿਤੀ ਲਈ
 ...
-### कारण
-...
-`}
+### ⚠️ ਜੋਖਮ
+**${situationContext.baselineRisk === 'Severe' ? 'ਗੰਭੀਰ' : situationContext.baselineRisk === 'High' ? 'ਉੱਚ' : situationContext.baselineRisk === 'Moderate' ? 'ਦਰਮਿਆਨਾ' : 'ਘੱਟ'}** — ...
+### ✅ ਤੁਹਾਨੂੰ ਕੀ ਕਰਨਾ ਚਾਹੀਦਾ ਹੈ
+- ...
+` : ''}
 
-Return JSON format:
+Do not make every response unnecessarily long. Use simple language understandable to ordinary people.
+
+Return valid JSON with:
 {
   "detectedLanguage": "${detected.code}",
   "detectedLanguageName": "${detected.name}",
   "speechLocale": "${detected.speechLocale}",
-  "replyText": string (the complete structured markdown reply in detected language),
-  "fullInfoToRead": string (clean readout formatted for speech synthesis in detected language without markdown symbols),
-  "voiceNoteTranscript": string (concise 1-2 sentence voice summary in detected language),
+  "replyText": string (the complete structured markdown reply in ${detected.name}),
+  "fullInfoToRead": string (clean natural spoken text without markdown asterisks or hashes, perfect for voice playback),
+  "voiceNoteTranscript": string (concise 1-2 sentence spoken summary),
   "personaUsed": "${situationContext.persona}",
   "hazardType": "flood" | "landslide" | "storm" | "heatwave" | "wildfire_weather" | "freeze_frost" | "dense_fog" | "none",
   "severity": "emergency" | "warning" | "watch" | "advisory" | "normal",
   "riskScore": number (0 to 100),
   "waveHeightM": ${parseFloat(seaWaveHeightM)},
-  "recommendedActions": [string, string, string],
+  "recommendedActions": [string, string],
   "situationAnalysis": {
     "intent": "${situationContext.intent}",
     "persona": "${situationContext.persona}",
@@ -3300,7 +3335,7 @@ Return JSON format:
     "riskReason": "${situationContext.riskReason}",
     "recommendation": string
   },
-  "communityAidTriggers": [string, string],
+  "communityAidTriggers": [string],
   "suggestedFollowUps": [string, string, string]
 }`;
 
@@ -3777,15 +3812,46 @@ export function generateGroundedFallbackResponse(
   // If situationContext was not provided, calculate it now
   const ctx: SituationDecisionContext = situationContext || extractSituationContext(query, 'general', liveWeather || { current: conditions }, activeAlerts, imdAlerts || [], isHindi);
 
-  // 1. If ambiguous query, return single minimal clarification question
-  if (ctx.intent === 'ambiguous_clarification' && ctx.clarificationQuestion) {
+  // 1. If ambiguous query, provide grounded weather forecast + baseline outdoor advice + concise clarification
+  if (ctx.intent === 'ambiguous_clarification') {
+    const tf = ctx.targetForecast;
+    const clarifyNote = isHindi
+      ? `सामान्य आवाजाही के लिए मौसम अनुकूल है।\n*(नोट: क्या आप यात्रा (travel), ट्रेकिंग (trekking), खेती (farming), मछली पकड़ने (fishing) या किसी अन्य गतिविधि के लिए जा रहे हैं? विशेष सलाह के लिए बताएं।)*`
+      : `Conditions are generally suitable for standard outdoor movement.\n*(Note: Are you travelling, trekking, farming, fishing, or doing another activity? Let me know for specialized safety guidance.)*`;
+
+    const text = isHindi
+      ? `### 🌦 मौसम
+${location} में ${ctx.timeContext} मौसम: ${tf.condition}, अधिकतम तापमान **${tf.maxTempC}°C**, न्यूनतम तापमान **${tf.minTempC}°C**। बारिश की संभावना **${tf.precipProb}%** (${tf.precipMm} mm), हवा **${tf.windKmh} km/h**।
+
+### 👤 आपकी स्थिति के लिए
+${clarifyNote}
+
+### ⚠️ जोखिम
+**${ctx.baselineRisk === 'Severe' ? 'गंभीर' : ctx.baselineRisk === 'High' ? 'उच्च' : ctx.baselineRisk === 'Moderate' ? 'मध्यम' : 'कम'}** — ${ctx.riskReason}
+
+### ✅ आपको क्या करना चाहिए
+- सामान्य आवाजाही सुरक्षित है।
+- दोपहर की धूप या हल्की हवा से बचाव रखें।`
+      : `### 🌦 WEATHER
+Expected weather in ${location} for ${ctx.timeContext}: ${tf.condition} with temperatures reaching **${tf.maxTempC}°C** (Low: **${tf.minTempC}°C**). Rain likelihood is **${tf.precipProb}%** (${tf.precipMm} mm) with surface winds around **${tf.windKmh} km/h**.
+
+### 👤 FOR YOUR SITUATION
+${clarifyNote}
+
+### ⚠️ RISK
+**${ctx.baselineRisk}** — ${ctx.riskReason}
+
+### ✅ WHAT TO DO
+- Standard outdoor movement and commuting are safe.
+- Keep light weather protection handy if spending extended hours outside.`;
+
     return {
-      text: ctx.clarificationQuestion,
+      text,
       structuredHazard: {
         hazardType: 'none',
         severity: 'normal',
         riskScore: 10,
-        recommendedActions: [],
+        recommendedActions: ['Standard outdoor movement is safe'],
         communityAidTriggers: [],
         affectedRadiusKm: 5.0,
       },
@@ -3795,8 +3861,8 @@ export function generateGroundedFallbackResponse(
         activity: ctx.activityName,
         timeframe: ctx.timeContext,
         riskLevel: ctx.baselineRisk,
-        riskReason: 'Awaiting activity clarification',
-        recommendation: ctx.clarificationQuestion,
+        riskReason: ctx.riskReason,
+        recommendation: tf.summary,
       },
       suggestedActions: [
         'I am going for a trek',
@@ -3806,25 +3872,35 @@ export function generateGroundedFallbackResponse(
     };
   }
 
-  // 2. If weather forecast inquiry, return direct high-contrast forecast
+  // 2. If weather forecast inquiry, return structured 4-section decision support
   if (ctx.intent === 'weather_forecast') {
-    const forecastDay = ctx.targetForecast;
-    const rainChance = forecastDay.precipProb;
-    const willRain = rainChance >= 50 ? (isHindi ? 'हाँ, बारिश होने की पूरी संभावना है।' : 'Yes, rain is likely.') : (isHindi ? 'बारिश की संभावना बहुत कम है।' : 'Rain is unlikely.');
+    const tf = ctx.targetForecast;
+    const rainChance = tf.precipProb;
+    const willRain = rainChance >= 50 ? (isHindi ? 'बारिश होने की पूरी संभावना है।' : 'Rain is likely.') : (isHindi ? 'बारिश की संभावना कम है।' : 'Rain is unlikely.');
 
     const forecastText = isHindi
-      ? `### ${location} मौसम पूर्वानुमान (${ctx.timeContext})
-- **पूर्वानुमान**: ${forecastDay.condition}, अधिकतम तापमान ${forecastDay.maxTempC}°C, न्यूनतम तापमान ${forecastDay.minTempC}°C।
-- **बारिश की संभावना**: **${rainChance}%** (${forecastDay.precipMm} mm) — ${willRain}
-- **हवा**: ${forecastDay.windKmh} km/h (झोंके: ${forecastDay.windGustKmh} km/h)
-- **वर्तमान**: ${tempC}°C, महसूस (Feels Like) ${feelsLikeC}°C, आर्द्रता ${humidity}, AQI ${aqi}।
-- **आधिकारिक चेतावनी**: ${imdAlerts && imdAlerts.length > 0 ? imdAlerts[0].headline : 'कोई गंभीर आपदा चेतावनी नहीं (Green)'}`
-      : `### ${location} Weather Outlook (${ctx.timeContext})
-- **Forecast**: ${forecastDay.condition}, High: ${forecastDay.maxTempC}°C, Low: ${forecastDay.minTempC}°C.
-- **Rain Likelihood**: **${rainChance}%** (${forecastDay.precipMm} mm) — ${willRain}
-- **Wind**: ${forecastDay.windKmh} km/h (Gusts up to ${forecastDay.windGustKmh} km/h).
-- **Current Observation**: ${tempC}°C, Feels Like ${feelsLikeC}°C, Humidity ${humidity}, AQI ${aqi}.
-- **Official Warning Status**: ${imdAlerts && imdAlerts.length > 0 ? imdAlerts[0].headline : 'Standard baseline conditions (IMD Green)'}.`;
+      ? `### 🌦 मौसम
+${location} में ${ctx.timeContext} का पूर्वानुमान: ${tf.condition}, अधिकतम तापमान **${tf.maxTempC}°C**, न्यूनतम तापमान **${tf.minTempC}°C**। बारिश की संभावना **${rainChance}%** (${tf.precipMm} mm) — ${willRain} हवा **${tf.windKmh} km/h** (झोंके: ${tf.windGustKmh} km/h)।
+
+### 👤 आपकी स्थिति के लिए
+दैनिक आवाजाही और सामान्य काम के लिए मौसम ${rainChance >= 50 ? 'में छतरी और रेनकोट की आवश्यकता होगी।' : 'अनुकूल और सूखा रहेगा।'}
+
+### ⚠️ जोखिम
+**${ctx.baselineRisk === 'Severe' ? 'गंभीर' : ctx.baselineRisk === 'High' ? 'उच्च' : ctx.baselineRisk === 'Moderate' ? 'मध्यम' : 'कम'}** — ${ctx.riskReason}
+
+### ✅ आपको क्या करना चाहिए
+${rainChance >= 50 ? '- बाहर निकलते समय छतरी या रेनकोट साथ रखें।\n- निचले जलभराव वाले रास्तों पर अतिरिक्त समय लेकर चलें।' : '- सामान्य दिनचर्या के अनुसार काम जारी रखें।\n- दोपहर में पर्याप्त पानी पिएं।'}`
+      : `### 🌦 WEATHER
+Expected weather in ${location} for ${ctx.timeContext}: ${tf.condition} with High: **${tf.maxTempC}°C** and Low: **${tf.minTempC}°C**. Rain likelihood is **${rainChance}%** (${tf.precipMm} mm) — ${willRain} Winds: **${tf.windKmh} km/h** (Gusts up to ${tf.windGustKmh} km/h).
+
+### 👤 FOR YOUR SITUATION
+For daily commuting and general outdoor activities, ${rainChance >= 50 ? 'expect wet surfaces and carry rain gear.' : 'conditions are clear and comfortable for normal travel.'}
+
+### ⚠️ RISK
+**${ctx.baselineRisk}** — ${ctx.riskReason}
+
+### ✅ WHAT TO DO
+${rainChance >= 50 ? '- Carry an umbrella or waterproof jacket when stepping out.\n- Allow extra commute time for potential traffic slowdowns.' : '- Proceed with regular outdoor plans.\n- Stay hydrated during peak afternoon hours.'}`;
 
     return {
       text: forecastText,
@@ -3843,7 +3919,7 @@ export function generateGroundedFallbackResponse(
         timeframe: ctx.timeContext,
         riskLevel: ctx.baselineRisk,
         riskReason: ctx.riskReason,
-        recommendation: forecastDay.summary,
+        recommendation: tf.summary,
       },
       suggestedActions: [
         `What is the wind speed for ${location}?`,
@@ -3853,7 +3929,7 @@ export function generateGroundedFallbackResponse(
     };
   }
 
-  // 3. SITUATION + DISASTER DECISION SUPPORT REASONING FORMAT (5 Sections)
+  // 3. SITUATION + DISASTER DECISION SUPPORT REASONING FORMAT (Section 9: 4 Sections)
   const tf = ctx.targetForecast;
   const act = ctx.activityName;
   const time = ctx.timeContext;
@@ -3861,167 +3937,146 @@ export function generateGroundedFallbackResponse(
 
   let whatItMeans = '';
   let whatToDo: string[] = [];
-  let whyReason = '';
 
   if (ctx.persona === 'trekker') {
     if (risk === 'Severe' || risk === 'High') {
-      whatItMeans = `High convective rainfall (${tf.precipProb}%, ${tf.precipMm} mm) and wind gusts (${tf.windGustKmh} km/h) will make mountain trails slick, cause sudden dense cloud obscuration, and create rapid hypothermia risk at high elevation.`;
+      whatItMeans = `High convective rainfall (${tf.precipProb}%, ${tf.precipMm} mm) and wind gusts (${tf.windGustKmh} km/h) will make mountain trails slick and hazardous, cause sudden dense cloud obscuration, and elevate hypothermia risk at high elevation.`;
       whatToDo = [
-        'Postpone summit attempts or high-altitude passes until conditions stabilize.',
-        'If already on the trail, turn back or descend to an established base shelter before afternoon.',
-        'Carry waterproof membrane outer layers and emergency bivouac foil.',
+        'Postpone summit attempts and high-altitude ridge traverses until weather clears.',
+        'If already on the trail, descend to an established base shelter before afternoon.',
+        'Ensure waterproof membrane outer layers and emergency thermal bivouac foil are easily accessible.',
       ];
-      whyReason = `Forecast shows ${tf.precipProb}% rain probability with gusts up to ${tf.windGustKmh} km/h. Mountain terrain accelerates temperature drop and trail washout under sustained showers.`;
     } else {
-      whatItMeans = `Fair weather conditions (${tf.condition}, High ${tf.maxTempC}°C) with manageable rain probability (${tf.precipProb}%). Trails are expected to remain dry and passable with good ridge visibility.`;
+      whatItMeans = `Fair weather conditions (${tf.condition}, High ${tf.maxTempC}°C) with low rain probability (${tf.precipProb}%). Trails are expected to remain dry and passable with good ridge visibility.`;
       whatToDo = [
-        'Start early in the morning (06:00 - 07:00 AM) to complete ridge crossings before afternoon thermals build.',
+        'Start early in the morning to complete exposed ridge crossings before afternoon thermals.',
         'Carry standard trail hydration (2L+) and a lightweight windbreaker jacket.',
-        'Inform base contacts of your intended trail waypoint timeline.',
+        'Inform base contacts or local guides of your intended route and check-in timeline.',
       ];
-      whyReason = `Precipitation probability is low (${tf.precipProb}%), wind speeds are mild (${tf.windKmh} km/h), and no convective storm alerts are in force.`;
     }
   } else if (ctx.persona === 'farmer') {
     if (act.includes('Spray')) {
       if (tf.precipProb >= 35 || tf.windKmh > 14) {
-        whatItMeans = `Chemical pesticide or foliar application has high risk of wind drift (>12 km/h) and chemical wash-off from rain (${tf.precipProb}% chance, ${tf.precipMm} mm), resulting in wasted input costs.`;
+        whatItMeans = `Chemical pesticide or foliar application has high risk of wind drift (>12 km/h) and chemical wash-off from impending rain (${tf.precipProb}% chance, ${tf.precipMm} mm), resulting in wasted input costs and reduced efficacy.`;
         whatToDo = [
-          'Postpone pesticide spraying until dry, calm conditions return.',
-          'Inspect field edges for active pest colonies in the interim.',
-          'Ensure spray nozzles and equipment are calibrated for the next calm window.',
+          'Postpone pesticide spraying until dry, calm weather returns (requires at least 4-6 hours dry foliage).',
+          'Inspect field borders for active pest pressure in the interim.',
+          'Ensure spray equipment and nozzles are cleaned and calibrated for the next calm window.',
         ];
-        whyReason = `Rain probability is ${tf.precipProb}% and wind speeds reach ${tf.windKmh} km/h. Effective pesticide adhesion requires at least 4-6 hours of rain-free foliage.`;
       } else {
-        whatItMeans = `Atmospheric conditions are favorable for spraying with low wash-off risk (${tf.precipProb}% rain chance) and calm surface air.`;
+        whatItMeans = `Atmospheric conditions are favorable for spraying with low wash-off risk (${tf.precipProb}% rain chance) and calm surface air (${tf.windKmh} km/h).`;
         whatToDo = [
           'Conduct spraying during the early morning calm window (06:30 - 09:30 AM).',
           'Use flat-fan nozzles to minimize chemical drift.',
-          'Wear personal protective gloves and face mask during application.',
+          'Wear standard protective gloves and a face mask during chemical handling.',
         ];
-        whyReason = `Winds are calm (${tf.windKmh} km/h), rain likelihood is minimal (${tf.precipProb}%), and reference ET0 is balanced.`;
       }
     } else if (act.includes('Irrigation')) {
       if (tf.precipProb >= 40) {
         whatItMeans = `Natural precipitation (${tf.precipProb}% chance, ${tf.precipMm} mm) will replenish topsoil moisture without requiring motorized pump irrigation.`;
         whatToDo = [
-          'Postpone artificial tube-well or canal irrigation for 24-48 hours.',
-          'Clean field drainage furrows to prevent root-zone waterlogging.',
-          'Save electricity and diesel pump expenditure.',
+          'Hold off on artificial tube-well or canal irrigation for the next 24-48 hours.',
+          'Clean field drainage channels to prevent root-zone waterlogging.',
+          'Save electricity and diesel pump operational expenditure.',
         ];
-        whyReason = `Incoming rainfall (${tf.precipMm} mm expected) provides sufficient moisture. Immediate irrigation would risk field inundation.`;
       } else {
         whatItMeans = `Dry conditions with high evapotranspiration demand (${tf.maxTempC}°C) mean crops will benefit from targeted moisture replenishment.`;
         whatToDo = [
           'Irrigate fields during early morning or late evening to minimize evaporative loss.',
-          'Target 30-40 mm soil wetting depth based on current crop phenology.',
+          'Target appropriate soil wetting depth based on current crop growth stage.',
         ];
-        whyReason = `Rain probability is low (${tf.precipProb}%) and ambient temperatures reach ${tf.maxTempC}°C.`;
       }
     } else {
       whatItMeans = `Current weather (${tf.condition}, High ${tf.maxTempC}°C) allows standard agricultural field operations with low atmospheric stress.`;
       whatToDo = [
         'Proceed with planned weeding, inter-culture, or field preparation.',
-        'Monitor soil moisture levels ahead of weekend weather updates.',
+        'Monitor soil moisture levels ahead of upcoming weather updates.',
       ];
-      whyReason = `Stable meteorological profile with rain probability at ${tf.precipProb}%.`;
     }
   } else if (ctx.persona === 'fisherman') {
     if (risk === 'Severe' || risk === 'High' || tf.windKmh > 35) {
-      whatItMeans = `High wind speeds (${tf.windKmh} km/h, gusts ${tf.windGustKmh} km/h) will generate rough seas with swells exceeding 2.5 meters, creating severe capsizing hazard for small craft and motorized trawlers.`;
+      whatItMeans = `High wind speeds (${tf.windKmh} km/h, gusts ${tf.windGustKmh} km/h) will generate rough seas with swells exceeding 2.5 meters, creating severe capsizing hazard for small craft and motorized boats.`;
       whatToDo = [
         'Do not venture into open sea. Anchor boats securely at harbor moorings.',
-        'Coastal fishermen out at sea should return to the nearest designated fish landing center.',
-        'Monitor VHF marine channel 16 and coastal radio stations for squall updates.',
+        'Vessels currently at sea should return to the nearest designated fish landing center immediately.',
+        'Monitor VHF marine channel 16 and coastal radio stations for squall warnings.',
       ];
-      whyReason = `Sustained winds over ${tf.windKmh} km/h and wave swell forecasts indicate unsafe marine conditions under IMD coastal warning protocol.`;
     } else {
-      whatItMeans = `Sea conditions are calm to slight with wave heights under 1.2m and favorable wind vectors (${tf.windKmh} km/h).`;
+      whatItMeans = `Sea conditions are calm to slight with wave heights under 1.2m and favorable wind speeds (${tf.windKmh} km/h).`;
       whatToDo = [
         'Safe to proceed with coastal fishing operations.',
-        'Ensure standard safety gear (life jackets, VHF transponder, emergency flares) are operational on board.',
-        'Plan return to harbor before evening tidal transitions.',
+        'Ensure standard safety gear (life jackets, VHF radio, emergency signaling) is verified on board.',
+        'Plan return to port before evening tidal transitions.',
       ];
-      whyReason = `Wind speeds are within safe navigational thresholds (${tf.windKmh} km/h) and no squall or cyclone watches are active.`;
     }
   } else if (ctx.persona === 'commuter') {
     if (risk === 'Severe' || risk === 'High') {
-      whatItMeans = `Heavy rainfall (${tf.precipMm} mm, ${tf.precipProb}%) and localized water pooling will cause severe slowdowns on main highways, low-lying railway underpasses, and reduce road traction.`;
+      whatItMeans = `Heavy rainfall (${tf.precipMm} mm, ${tf.precipProb}%) and localized water pooling will cause slowdowns on main highways, low-lying underpasses, and reduce road traction.`;
       whatToDo = [
         'Buffer an additional 30-45 minutes into your commute timeline.',
-        'Avoid known low-lying underpasses and flooded road dips ("Turn around, don\'t drown").',
+        'Avoid known low-lying underpasses and flooded road dips.',
         'Turn on vehicle headlights in reduced visibility and increase braking distance.',
       ];
-      whyReason = `Forecast calls for ${tf.precipProb}% rain chance with high runoff accumulation potential during peak transit hours.`;
     } else {
-      whatItMeans = `Road conditions are clear with good visibility and dry pavement along major highway corridors.`;
+      whatItMeans = `Road conditions are clear with good visibility and dry pavement along major transit corridors.`;
       whatToDo = [
         'Proceed with normal travel schedules.',
         'Maintain routine vehicle checks (tire pressure, wiper blades).',
       ];
-      whyReason = `Rain chance is low (${tf.precipProb}%), wind speeds are mild (${tf.windKmh} km/h), and no traffic advisory alerts are in effect.`;
     }
   } else if (ctx.persona === 'sdma' || act.includes('Disaster') || act.includes('Civic Safety')) {
-    whatItMeans = `Active emergency alert (${tf.condition}, ${tf.precipProb}% rain, gusts ${tf.windGustKmh} km/h) creates significant hazards: localized street flooding, waterlogged underpasses, potential power disruptions, and falling branches.`;
+    whatItMeans = `Active weather alert (${tf.condition}, ${tf.precipProb}% rain, gusts ${tf.windGustKmh} km/h) creates localized street flooding, waterlogged underpasses, and potential power disruptions.`;
     whatToDo = [
-      'Stay indoors in structurally sound premises; avoid ground-level basements prone to water ingress.',
-      'Do not walk, drive, or cycle through flooded streets or open storm drains ("Turn Around, Don\'t Drown").',
-      'Keep emergency flashlights, fully charged battery banks, drinking water, and essential medicines accessible.',
-      'Monitor official IMD/NDMA civic broadcast alerts and follow local authority directives.',
+      'Stay indoors in structurally sound premises; avoid low-lying basements prone to water ingress.',
+      'Do not walk, drive, or cycle through flooded roads or open storm drains.',
+      'Keep emergency flashlights, battery banks, drinking water, and essential medicines accessible.',
+      'Monitor official IMD/NDMA broadcasts and follow civic authority directives.',
     ];
-    whyReason = `Active weather alert thresholds with precipitation probability at ${tf.precipProb}% (${tf.precipMm} mm) and wind gusts up to ${tf.windGustKmh} km/h.`;
   } else {
     // General outdoor activity
     if (risk === 'Severe' || risk === 'High') {
-      whatItMeans = `Elevated weather risks (${tf.condition}, ${tf.precipProb}% rain, winds ${tf.windKmh} km/h) will impact outdoor plans, events, and transit.`;
+      whatItMeans = `Elevated weather conditions (${tf.condition}, ${tf.precipProb}% rain, winds ${tf.windKmh} km/h) will impact outdoor plans, events, and transit.`;
       whatToDo = [
         'Reschedule open-air gatherings or secure waterproof canopy coverage.',
         'Carry umbrella, rain jacket, and keep mobile devices in protective waterproof pouches.',
-        'Check local civic alerts before embarking on extended outdoor travel.',
+        'Check local civic alerts before extended outdoor movement.',
       ];
-      whyReason = `Atmospheric moisture and wind parameters meet watch criteria with rain probability at ${tf.precipProb}%.`;
     } else {
-      whatItMeans = `Pleasant outdoor conditions (${tf.condition}, High ${tf.maxTempC}°C / Low ${tf.minTempC}°C) suitable for outdoor activities.`;
+      whatItMeans = `Pleasant outdoor conditions (${tf.condition}, High ${tf.maxTempC}°C / Low ${tf.minTempC}°C) suitable for daily routines and errands.`;
       whatToDo = [
         'Proceed with outdoor routines comfortably.',
-        'Stay hydrated during the mid-day heat peak.',
+        'Stay hydrated during the peak afternoon sun.',
       ];
-      whyReason = `Precipitation probability is only ${tf.precipProb}% with stable atmospheric pressure.`;
     }
   }
 
-  // Format decision response text
+  // Format decision response text in Section 9 format
   let structuredText = '';
   if (isHindi) {
-    const riskLabel = risk === 'Severe' ? 'गंभीर (Severe)' : risk === 'High' ? 'उच्च (High)' : risk === 'Moderate' ? 'मध्यम (Moderate)' : 'कम (Low)';
-    structuredText = `### ${act.toUpperCase()} आउटलुक (${time.toUpperCase()})
-${location} में ${time} मौसम: ${tf.condition}, अधिकतम तापमान **${tf.maxTempC}°C**, न्यूनतम तापमान **${tf.minTempC}°C**। बारिश की संभावना **${tf.precipProb}%** (${tf.precipMm} mm), हवा **${tf.windKmh} km/h**।
+    const riskLabel = risk === 'Severe' ? 'गंभीर' : risk === 'High' ? 'उच्च' : risk === 'Moderate' ? 'मध्यम' : 'कम';
+    structuredText = `### 🌦 मौसम
+${location} में ${time} का मौसम: ${tf.condition}, अधिकतम तापमान **${tf.maxTempC}°C**, न्यूनतम तापमान **${tf.minTempC}°C**। बारिश की संभावना **${tf.precipProb}%** (${tf.precipMm} mm), हवा **${tf.windKmh} km/h**।
 
-### आपके लिए इसका क्या अर्थ है
+### 👤 आपकी स्थिति के लिए
 ${whatItMeans}
 
-### जोखिम
+### ⚠️ जोखिम
 **${riskLabel}** — ${ctx.riskReason}
 
-### आपको क्या करना चाहिए
-${whatToDo.map((step, i) => `${i + 1}. ${step}`).join('\n')}
-
-### कारण
-${whyReason}`;
+### ✅ आपको क्या करना चाहिए
+${whatToDo.map((step) => `- ${step}`).join('\n')}`;
   } else {
-    structuredText = `### ${act.toUpperCase()} OUTLOOK (${time.toUpperCase()})
-Expected weather in ${location} for ${time}: ${tf.condition} with temperatures reaching **${tf.maxTempC}°C** (Low: **${tf.minTempC}°C**). Rain likelihood is **${tf.precipProb}%** (${tf.precipMm} mm) with surface winds around **${tf.windKmh} km/h**.
+    structuredText = `### 🌦 WEATHER
+Expected weather in ${location} for ${time}: ${tf.condition} with High: **${tf.maxTempC}°C** and Low: **${tf.minTempC}°C**. Rain likelihood is **${tf.precipProb}%** (${tf.precipMm} mm) with surface winds around **${tf.windKmh} km/h**.
 
-### WHAT IT MEANS FOR YOU
+### 👤 FOR YOUR SITUATION
 ${whatItMeans}
 
-### RISK
+### ⚠️ RISK
 **${risk}** — ${ctx.riskReason}
 
-### WHAT YOU SHOULD DO
-${whatToDo.map((step, i) => `${i + 1}. ${step}`).join('\n')}
-
-### WHY
-${whyReason}`;
+### ✅ WHAT TO DO
+${whatToDo.map((step) => `- ${step}`).join('\n')}`;
   }
 
   return {

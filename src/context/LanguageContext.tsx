@@ -82,9 +82,11 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [autoReadAnswers, setAutoReadAnswersState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(AUTOREAD_STORAGE_KEY);
-      return saved === 'true';
+      if (saved !== null) {
+        return saved === 'true';
+      }
     } catch {}
-    return false;
+    return true; // Default: ON (Auto-read responses enabled by default)
   });
 
   // Persist App Language

@@ -142,6 +142,11 @@ export function getSavedUserLocation(): GeolocationResult | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
+    // Purge any stale hardcoded Shimla or invalid cache
+    if (parsed && typeof parsed.address === 'string' && (parsed.address.toLowerCase().includes('shimla') || parsed.address.toLowerCase().includes('himachal'))) {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
     if (parsed && Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
       return {
         coords: { lat: parsed.lat, lng: parsed.lng },
@@ -173,6 +178,83 @@ export function saveUserLocationToCache(coords?: Coordinates, address: string = 
   } catch {
     // Ignore error
   }
+}
+
+export interface GpsAcquisitionResult {
+  success: boolean;
+  coords?: Coordinates;
+  address?: string;
+  accuracyMeters?: number;
+  error?: {
+    code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'NOT_SUPPORTED';
+    message: string;
+  };
+}
+
+/**
+ * Explicit GPS Detector:
+ * Used directly when user clicks "Detect GPS".
+ * Does NOT silently pretend or fall back to an arbitrary city.
+ */
+export async function acquireRealGpsCoordinates(): Promise<GpsAcquisitionResult> {
+  if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+    return {
+      success: false,
+      error: {
+        code: 'NOT_SUPPORTED',
+        message: 'GPS geolocation is not supported by your current browser.',
+      },
+    };
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const coords: Coordinates = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        const accuracy = Math.round(position.coords.accuracy) || 20;
+        let address = '';
+        try {
+          address = await reverseGeocode(coords.lat, coords.lng);
+        } catch {
+          address = `Coordinates ${coords.lat.toFixed(4)}°, ${coords.lng.toFixed(4)}°`;
+        }
+        // Save to cache as verified user GPS
+        saveUserLocationToCache(coords, address, accuracy);
+        resolve({
+          success: true,
+          coords,
+          address,
+          accuracyMeters: accuracy,
+        });
+      },
+      (geoError) => {
+        let code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' = 'POSITION_UNAVAILABLE';
+        let message = 'Unable to determine GPS location.';
+        if (geoError.code === geoError.PERMISSION_DENIED) {
+          code = 'PERMISSION_DENIED';
+          message = 'Location permission was denied. Please allow location access in your browser or device settings and retry.';
+        } else if (geoError.code === geoError.TIMEOUT) {
+          code = 'TIMEOUT';
+          message = 'GPS detection timed out. Please try again or switch to manual zone selection.';
+        } else if (geoError.code === geoError.POSITION_UNAVAILABLE) {
+          code = 'POSITION_UNAVAILABLE';
+          message = 'GPS position is currently unavailable on this device.';
+        }
+        resolve({
+          success: false,
+          error: { code, message },
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 9000,
+        maximumAge: 0,
+      }
+    );
+  });
 }
 
 /**
@@ -290,8 +372,8 @@ export async function detectRealLocation(): Promise<GeolocationResult> {
   if (cached) return cached;
 
   return {
-    coords: { lat: 37.7749, lng: -122.4194 },
-    address: 'San Francisco, CA, USA',
+    coords: { lat: 28.6139, lng: 77.2090 },
+    address: 'New Delhi, India',
     accuracyMeters: 5000,
     source: 'saved_cache',
     isExactGps: false,

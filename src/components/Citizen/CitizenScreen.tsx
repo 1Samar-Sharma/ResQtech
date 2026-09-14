@@ -158,6 +158,7 @@ interface ChatMessage {
   detectedLanguage?: string;
   detectedLanguageName?: string;
   speechLocale?: string;
+  fullInfoToRead?: string;
 }
 
 export const CitizenScreen: React.FC<CitizenScreenProps> = ({
@@ -169,6 +170,8 @@ export const CitizenScreen: React.FC<CitizenScreenProps> = ({
     askLanguage,
     currentAskLanguage,
     askSpeechLocale,
+    autoReadAnswers,
+    setAutoReadAnswers,
     t,
   } = useLanguage();
 
@@ -231,17 +234,32 @@ export const CitizenScreen: React.FC<CitizenScreenProps> = ({
     stopSpeech();
 
     const cleanText = text
-      .replace(/[#*`_]/g, '')
+      .replace(/###\s*[^\n]+/g, (match) => match.replace(/###\s*/, '') + '. ')
+      .replace(/[#*`_~]/g, '')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[-•]\s*/g, '')
       .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     if (!cleanText) return;
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = speechLocale || askSpeechLocale || 'hi-IN';
-    utterance.rate = 1.0;
+    const targetLocale = speechLocale || askSpeechLocale || 'en-US';
+    utterance.lang = targetLocale;
+    utterance.rate = 0.95;
     utterance.pitch = 1.0;
+
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0) {
+        const langPrefix = targetLocale.split('-')[0].toLowerCase();
+        const matchedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
+        if (matchedVoice) {
+          utterance.voice = matchedVoice;
+        }
+      }
+    } catch {}
 
     utterance.onend = () => setPlayingMessageId(null);
     utterance.onerror = () => setPlayingMessageId(null);
@@ -295,8 +313,20 @@ export const CitizenScreen: React.FC<CitizenScreenProps> = ({
           detectedLanguage: data.detectedLanguage,
           detectedLanguageName: data.detectedLanguageName,
           speechLocale: data.speechLocale,
+          fullInfoToRead: data.fullInfoToRead,
         };
         setMessages((prev) => [...prev, assistantMessage]);
+
+        // Auto-read aloud if enabled
+        if (autoReadAnswers) {
+          setTimeout(() => {
+            handleSpeak(
+              assistantMessage.id,
+              data.fullInfoToRead || assistantMessage.text,
+              data.speechLocale || assistantMessage.speechLocale
+            );
+          }, 300);
+        }
       } else {
         throw new Error(data.error || 'No reply');
       }
@@ -380,8 +410,8 @@ export const CitizenScreen: React.FC<CitizenScreenProps> = ({
   // =========================================================================
   return (
     <div className="w-full max-w-3xl mx-auto space-y-4 pb-20 animate-fadeIn">
-      {/* Top Header with Back Navigation */}
-      <div className="flex items-center justify-between gap-2 pb-1">
+      {/* Top Header with Back Navigation & Auto-read toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
         <button
           type="button"
           onClick={handleBackToRoles}
@@ -391,9 +421,29 @@ export const CitizenScreen: React.FC<CitizenScreenProps> = ({
           <span>← Back to all Citizen options</span>
         </button>
 
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/10 border border-slate-300 dark:border-white/10 text-xs font-black text-slate-800 dark:text-slate-200">
-          <span>{activeRoleData?.icon}</span>
-          <span>{activeRoleData?.label}</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const next = !autoReadAnswers;
+              setAutoReadAnswers(next);
+              if (!next) stopSpeech();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+              autoReadAnswers
+                ? 'bg-sky-100 dark:bg-sky-500/20 text-sky-900 dark:text-sky-200 border-sky-400'
+                : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-white/10'
+            }`}
+            title="Toggle automatic voice readout of answers"
+          >
+            {autoReadAnswers ? <Volume2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" /> : <VolumeX className="w-3.5 h-3.5" />}
+            <span>Auto-read: {autoReadAnswers ? 'ON' : 'OFF'}</span>
+          </button>
+
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/10 border border-slate-300 dark:border-white/10 text-xs font-black text-slate-800 dark:text-slate-200">
+            <span>{activeRoleData?.icon}</span>
+            <span>{activeRoleData?.label}</span>
+          </div>
         </div>
       </div>
 
@@ -488,13 +538,15 @@ export const CitizenScreen: React.FC<CitizenScreenProps> = ({
                       type="button"
                       onClick={() => handleSpeak(msg.id, msg.text, msg.speechLocale)}
                       className={`flex items-center gap-1 font-black transition-colors cursor-pointer ${
-                        isAudioPlaying ? 'text-sky-600 dark:text-sky-400 animate-pulse' : 'hover:text-slate-950 dark:hover:text-white text-slate-700 dark:text-slate-200'
+                        isAudioPlaying
+                          ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-lg border border-rose-300 dark:border-rose-700 animate-pulse'
+                          : 'hover:text-slate-950 dark:hover:text-white text-slate-700 dark:text-slate-200'
                       }`}
-                      title={isAudioPlaying ? 'Stop speaking' : 'Listen out loud'}
-                      aria-label={isAudioPlaying ? 'Stop speaking' : 'Listen out loud'}
+                      title={isAudioPlaying ? 'Stop speaking audio immediately' : 'Listen out loud'}
+                      aria-label={isAudioPlaying ? 'Stop speaking audio immediately' : 'Listen out loud'}
                     >
-                      {isAudioPlaying ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />}
-                      <span>{isAudioPlaying ? 'Speaking...' : 'Listen'}</span>
+                      {isAudioPlaying ? <VolumeX className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />}
+                      <span>{isAudioPlaying ? '⏹ Stop Audio' : 'Listen'}</span>
                     </button>
                     <span>•</span>
                     <button
@@ -524,8 +576,29 @@ export const CitizenScreen: React.FC<CitizenScreenProps> = ({
         <div ref={chatBottomRef} />
       </div>
 
-      {/* Clean In-Flow Input Bar (NO popup or floating overlays) */}
-      <div className="sticky bottom-3 z-30 pt-2">
+      {/* Clean In-Flow Input Bar with Floating Stop Banner */}
+      <div className="sticky bottom-3 z-30 pt-2 space-y-2">
+        {playingMessageId && (
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-rose-600 text-white shadow-lg border border-rose-400 animate-fadeIn">
+            <div className="flex items-center gap-2 text-xs font-black">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+              </span>
+              <span>🔊 Speaking answer aloud...</span>
+            </div>
+            <button
+              type="button"
+              onClick={stopSpeech}
+              className="px-3 py-1.5 rounded-xl bg-white text-rose-700 hover:bg-rose-50 font-black text-xs shadow-xs transition-transform active:scale-95 cursor-pointer flex items-center gap-1.5"
+              title="Stop voice playback"
+            >
+              <VolumeX className="w-3.5 h-3.5" />
+              <span>⏹ STOP AUDIO</span>
+            </button>
+          </div>
+        )}
+
         <VoiceInputBar
           onSendMessage={handleSendMessage}
           isProcessing={isAsking}
